@@ -59,7 +59,9 @@
 
   <img id="qr" alt="QR-Code zur Bewerbswahl" />
 
-  <p class="votes">Bisher abgegebene Stimmen: <span id="count">–</span></p>
+  <p class="votes">Stimmberechtigt: <span id="presentCount">–</span></p>
+
+  <p class="votes">abgegebene Stimmen: <span id="count">–</span></p>
 
   <!-- Button mit direkter Weiterleitung -->
   <button class="btn-end" onclick="endVoting()">Abstimmung beenden</button>
@@ -82,11 +84,37 @@
     "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=" +
     encodeURIComponent(url);
 
+  // Live-Farbwechsel wenn alle Stimmen da sind
+  let presentCount = 0;
+  let voteCount = 0;
+
+  function updateColorState() {
+    // wenn keine Stimmberechtigten eingetragen sind, nichts umschalten
+    if (!presentCount) return;
+
+    if (voteCount >= presentCount) {
+      document.body.style.background = "#16a34a"; // grün
+    } else {
+      document.body.style.background = "#f4f6f8"; // standard
+    }
+  }
+
+  // Stimmberechtigte (present)
+  const presentSpan = document.getElementById('presentCount');
+  db.ref('present').on('value', snap => {
+    const present = snap.val() || {};
+    presentCount = Object.keys(present).length;
+    presentSpan.textContent = presentCount;
+    updateColorState();
+  });
+
   // Stimmen auslesen
   const countSpan = document.getElementById('count');
   db.ref('votes').on('value', snap => {
     const votes = snap.val() || {};
-    countSpan.textContent = Object.keys(votes).length;
+    voteCount = Object.keys(votes).length;
+    countSpan.textContent = voteCount;
+    updateColorState();
   });
 
   // Weiterleitung zur Auswertung (gehostet)
