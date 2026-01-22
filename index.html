@@ -29,8 +29,7 @@
       position:relative;
     }
     h1 {
-      margin:0;
-      margin-bottom:10px;
+      margin:0 0 10px;
     }
     .note {
       text-align:center;
@@ -52,6 +51,15 @@
     label.option-label input[type="checkbox"] {
       margin-top:2px;
     }
+
+    /* 🔒 gesperrte Optionen */
+    label.option-label.disabled {
+      color:#999;
+    }
+    label.option-label.disabled span {
+      text-decoration: line-through;
+    }
+
     button {
       padding:10px 16px;
       border:none;
@@ -72,7 +80,7 @@
       text-align:center;
     }
     .birth-wrapper {
-      margin:10px 0 0;
+      margin-top:10px;
       text-align:center;
     }
     .birth-hint {
@@ -99,62 +107,47 @@
 
 <div class="container" id="pageContainer">
 
-  <!-- Info-Banner (wird ggf. per JS eingefügt) -->
-
-  <!-- Titelkarte mit Logos -->
   <div class="card" style="padding-top:60px; padding-bottom:40px; text-align:center; margin-bottom:35px;">
-
-    <!-- Logo links -->
     <img src="00_Logo_freigestellt.png"
-         style="position:absolute; left:25px; top:25px; height:85px; width:auto;"
-         alt="Vereinslogo links">
-
-    <!-- Logo rechts -->
+         style="position:absolute; left:25px; top:25px; height:85px;"
+         alt="Logo links">
     <img src="00_Logo_freigestellt.png"
-         style="position:absolute; right:25px; top:25px; height:85px; width:auto;"
-         alt="Vereinslogo rechts">
+         style="position:absolute; right:25px; top:25px; height:85px;"
+         alt="Logo rechts">
 
     <h1>FC-Betenmacher – Bewerbswahl</h1>
     <p class="note">
-      Bitte wähle <strong>genau 3 Sportarten</strong> und <strong>genau 3 Sonstiges</strong>.<br>
-      (*) = gesperrt aufgrund der 3-Jahres-Regel
+      Es werden 3 Bewerbe aus der Kategorie <strong>"Sportarten"</strong> und 3 Bewerbe aus der Kategorie <strong>"Sonstiges"</strong> gewählt <br>
+	Der Ersatzbewerb ist jener Bewerb, der innerhalb einer der beiden Kategorien die nächstmeisten Stimmen erhalten hat <br><br>
+	Bitte wähle <strong>genau 3 Sportarten</strong> und <strong>genau 3 Sonstiges</strong>.<br><br>
+      Durchgestrichene Bewerbe sind aufgrund der 3 Jahres Regel gesperrt <br>
+	<strong>( ² )</strong> Der Bewerb mit mehr Stimmen in der Kategorie gilt als gewählt
+	
     </p>
   </div>
 
-  <!-- Geburtsdatum -->
   <div class="card">
     <div class="birth-wrapper">
-      <label for="birthdate" style="display:flex; flex-direction:column; gap:8px; align-items:center;">
-        <span><strong>Geburtsdatum eingeben (TTMMJJJJ):</strong></span>
-        <input
-          type="text"
-          id="birthdate"
-          maxlength="10"
-          placeholder="TTMMJJJJ"
-          autocomplete="off"
-        >
+      <label>
+        <strong>Geburtsdatum eingeben (TTMMJJJJ):</strong><br>
+        <input id="birthdate" maxlength="10" placeholder="TTMMJJJJ">
       </label>
       <p class="birth-hint">
-        xxxDas Geburtsdatum wird ausschließlich dafür verwendet, um sicherzustellen, dass jede Person nur
-        einmal anonym abstimmt. In der Datenbank werden keine Namen, Mitgliedsnummern oder andere
-        persönlichen Daten gespeichert, die Rückschlüsse darauf erlauben, wer welche Auswahl getroffen hat.
+        Das Geburtsdatum dient ausschließlich der anonymen Einmal-Abstimmung.
       </p>
     </div>
   </div>
 
-  <!-- Sportarten -->
   <div class="card">
     <h2>Sportarten</h2>
     <div class="grid" id="sports"></div>
   </div>
 
-  <!-- Sonstiges -->
   <div class="card">
     <h2>Sonstiges</h2>
     <div class="grid" id="others"></div>
   </div>
 
-  <!-- Button -->
   <div class="card" style="text-align:center">
     <button id="btnSubmit" onclick="submitVote()">Stimme abgeben</button>
     <p id="status" class="note"></p>
@@ -163,7 +156,7 @@
 </div>
 
 <script>
-// ===================== Firebase-Konfiguration =====================
+// ===================== Firebase =====================
 const firebaseConfig = {
   apiKey: "AIzaSyCRkIU7F42QPrs2oMOymQxF4MVKM7oQZTw",
   authDomain: "fc-betenmacher-bewerbswa-b44e4.firebaseapp.com",
@@ -173,269 +166,92 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-// ===================== Device-ID pro Gerät =====================
-function getDeviceId() {
-  const KEY = 'fc_betenmacher_device_id';
-  let id = localStorage.getItem(KEY);
-  if (!id) {
-    if (window.crypto && crypto.randomUUID) {
-      id = crypto.randomUUID();
-    } else {
-      id = 'dev-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
-    }
-    localStorage.setItem(KEY, id);
-  }
-  return id;
-}
-const DEVICE_ID = getDeviceId();
-
 // ===================== Optionen =====================
 const sportOptions = [
   'Weitsprung',
-  'Fuschlseelauf*',
-  'Mountainbikerennen*',
-  'Triathlon',
-  'Paddle Tennis³',
-  'Sackhüpfen mit Hindernisparkour',
-  'Schlagball',
-  'Hindernisparkour Halle',
-  'Lauf Moos - Bettei',
   'Ski fahren',
-  'Skilanglauf²',
-  '1500-Meter-Lauf*',
-  'Tischtennis*',
-  'Badminton*',
-  'Kart fahren (mit Selbstbehalt)',
-  'Torabschlag',
-  'Seil ziehen',
-  'Hindernislauf im Freien',
-  'Bierkistenlauf*',
-  'Biathlon²',
+  'Bierkistenlauf *',
+  'Fuschlseelauf *',
+  'Skilanglauf',
+  '1 vs 1 Fussball Turnier',
+  'Mountainbikerennen *',
+  '1500-Meter-Lauf *',
   '100 Meter Schwimmen',
-  'Tennis³*',
+  'Tischtennis *',
+  'Tennis ² *',
+  'Paddle Tennis ²',
+  'Badminton *',
   'Kugelstoßen',
+  'Sackhüpfen mit Hindernisparkour',
+  'Kart fahren (mit Selbstbehalt)',
   'Maßkrugstemmen',
+  'Schlagball',
+  'Torabschlag',
   'Volleyball 2 vs 2',
+  'Hindernisparkour Halle',
+  'Seil ziehen',
   'Klettern',
-  'Dreikampf (Standweitsprung, Bierdeckel Ziel werfen, an Reckstange hängen)'
+  'Lauf Bettei - Moos',
+  'Armdrücken',
+  'Triathlon halbe Sprintdistanz (400m Schwimmen, 10 km Radfahren, 2,5 km Laufen)',
+  'Dreikampf (Standweitsprung, Bierdeckel Ziel werfen, an Reckstange hängen) *'
 ];
 
 const otherOptions = [
-  'Darts*',
+  'Darts *',
+  'Bogenschießen *',
+  'Zimmergewehrschießen *',
   'Holzstocknageln',
-  'Eisstockschießen/Asphaltschießen*',
-  'Basketballfreiwurf',
-  'Elfmeterschießen*',
-  'Tischfußball',
-  'Fußball-Darts',
-  'Fußball-Golf',
-  'Quizduell',
-  'Bogenschießen*',
-  'Kegeln²*',
+  'Kegeln ² *',
+  'Bowling ² *',
+  'Eisstockschießen/Asphaltschießen *',
   'Dosenwerfen',
-  'Minigolf',
-  'Bierpong*',
-  'Wattturnier',
-  '8-Billard',
-  'Cornehole',
-  '3D-4-Gewinnt',
-  'Zimmergewehrschießen*',
-  'Bowling²*',
   'Torwandschießen',
+  'Basketballfreiwurf',
+  'Minigolf',
   'Plattenwerfen',
+  'Elfmeterschießen *',
+  'Bierpong *',
   'Schätzen',
-  'FIFA-Turnier',
+  'Tischfußball',
+  'Watttunier',
+  'FIFA-Tunier',
+  'Fußball-Darts',
+  '8-Billard',
   'Papierfliegerweitwurf',
+  'Fußball-Golf',
+  'Cornehole',
   'Fussball - Lattenkrachen',
-  'Bauern-Olympiade (Gummistiefel Zielwurf, Hufeisenwerfen, Baumstamm sägen)'
+  'Quizduell',
+  '3D-4 Gewinnt',
+  'Bauern - Olymiade (Gummistiefel Zielwurf, Hufeisenwerfen, Baumstamm sägen)'
 ];
 
 // ===================== Rendering =====================
 function renderOptions(list, containerId, type) {
   const container = document.getElementById(containerId);
   container.innerHTML = '';
+
   list.forEach(text => {
-    const disabled = text.includes('*') ? 'disabled' : '';
+    const isDisabled = text.includes('*');
+    const cleanText = text.replace(/\s*\*\s*/g, '').trim();
+
     const label = document.createElement('label');
-    label.className = 'option-label';
+    label.className = 'option-label' + (isDisabled ? ' disabled' : '');
+
     label.innerHTML = `
-      <input type="checkbox" data-type="${type}" value="${text}" ${disabled}>
-      <span>${text}</span>
+      <input type="checkbox" data-type="${type}" value="${cleanText}" ${isDisabled ? 'disabled' : ''}>
+      <span>${cleanText}</span>
     `;
     container.appendChild(label);
   });
 }
 
-// ===================== Geburtsdatum: nur Zahlen, Auto-Format TT-MM-JJJJ =====================
-document.addEventListener('DOMContentLoaded', () => {
-  const birthField = document.getElementById('birthdate');
-  if (!birthField) return;
-
-  birthField.addEventListener('input', (e) => {
-    let v = e.target.value;
-    // alles außer Ziffern entfernen
-    v = v.replace(/\D/g, '');
-    // max. 8 Ziffern (TTMMJJJJ)
-    if (v.length > 8) v = v.slice(0, 8);
-
-    let formatted = v;
-    if (v.length > 4) {
-      formatted = v.slice(0,2) + '-' + v.slice(2,4) + '-' + v.slice(4);
-    } else if (v.length > 2) {
-      formatted = v.slice(0,2) + '-' + v.slice(2);
-    }
-
-    e.target.value = formatted;
-  });
-});
-
-// Hilfsfunktion: TT-MM-JJJJ -> Validierung + YYYY-MM-DD
-function parseBirthdate(input) {
-  const m = /^(\d{2})-(\d{2})-(\d{4})$/.exec(input);
-  if (!m) return null;
-  const dd = parseInt(m[1], 10);
-  const mm = parseInt(m[2], 10);
-  const yyyy = parseInt(m[3], 10);
-
-  if (mm < 1 || mm > 12) return null;
-  if (dd < 1 || dd > 31) return null;
-
-  const d = new Date(yyyy, mm - 1, dd);
-  if (
-    d.getFullYear() !== yyyy ||
-    d.getMonth() !== (mm - 1) ||
-    d.getDate() !== dd
-  ) {
-    return null;
-  }
-
-  const iso = `${yyyy.toString().padStart(4,'0')}-${mm.toString().padStart(2,'0')}-${dd.toString().padStart(2,'0')}`;
-  return { display: input, key: iso };
-}
-
-// ===================== Gerät hat schon abgestimmt? =====================
-function checkExistingVote() {
-  const deviceRef = db.ref('deviceVotes/' + DEVICE_ID);
-  deviceRef.once('value').then(snap => {
-    if (snap.exists()) {
-      const banner = document.createElement('div');
-      banner.className = 'info-banner';
-      banner.textContent = 'Du hast bereits abgestimmt. Vielen Dank!';
-      const container = document.getElementById('pageContainer');
-      container.insertBefore(banner, container.firstChild);
-
-      const btn = document.getElementById('btnSubmit');
-      if (btn) btn.disabled = true;
-    }
-  }).catch(err => {
-    console.error('Fehler beim Prüfen von deviceVotes:', err);
-  });
-}
-
-// ===================== Abstimmung senden =====================
-async function submitVote() {
-  const selectedSports = [...document.querySelectorAll('[data-type=sport]:checked')];
-  const selectedOthers = [...document.querySelectorAll('[data-type=other]:checked')];
-  const birthField = document.getElementById('birthdate');
-  const birthRaw = birthField ? birthField.value.trim() : '';
-  const statusEl = document.getElementById('status');
-  const btn = document.getElementById('btnSubmit');
-
-  statusEl.textContent = '';
-
-  if (!birthRaw) {
-    alert('Bitte gib dein Geburtsdatum ein (TTMMJJJJ).');
-    return;
-  }
-
-  const parsed = parseBirthdate(birthRaw);
-  if (!parsed) {
-    alert('Das Geburtsdatum ist ungültig. Bitte im Format TTMMJJJJ eingeben.');
-    return;
-  }
-
-  const birthDisplay = parsed.display; // TT-MM-JJJJ
-  const birthKey = parsed.key;        // YYYY-MM-DD
-
-  if (selectedSports.length !== 3 || selectedOthers.length !== 3) {
-    alert('Bitte genau 3 Sportarten und genau 3 Sonstiges auswählen.');
-    return;
-  }
-
-  btn.disabled = true;
-  statusEl.textContent = 'Bitte warten, Stimme wird geprüft …';
-
-  try {
-    // 1) Gerät schon abgestimmt?
-    const deviceSnap = await db.ref('deviceVotes/' + DEVICE_ID).once('value');
-    if (deviceSnap.exists()) {
-      alert('Dieses Gerät hat bereits abgestimmt. Mehrfach-Abstimmungen sind nicht erlaubt.');
-      btn.disabled = false;
-      statusEl.textContent = '';
-      return;
-    }
-
-    // 2) Anwesenheit prüfen
-    let presentSnap;
-    try {
-      presentSnap = await db.ref('present/' + birthKey).once('value');
-    } catch (err) {
-      console.error('Fehler beim Lesen von /present:', err);
-      alert('Interner Fehler: Anwesenheitsliste konnte nicht geprüft werden. Bitte wende dich an die Wahlleitung.');
-      btn.disabled = false;
-      statusEl.textContent = '';
-      return;
-    }
-
-    if (!presentSnap.exists()) {
-      alert('Du bist für diese Abstimmung nicht als anwesend markiert. Bitte melde dich bei der Wahlleitung.');
-      btn.disabled = false;
-      statusEl.textContent = '';
-      return;
-    }
-
-    // 3) Für dieses Geburtsdatum schon eine Stimme?
-    const voteSnap = await db.ref('votes/' + birthKey).once('value');
-    if (voteSnap.exists()) {
-      alert('Für dieses Geburtsdatum wurde bereits eine Stimme abgegeben.');
-      btn.disabled = false;
-      statusEl.textContent = '';
-      return;
-    }
-
-    // 4) Alles OK -> speichern
-    const vote = {
-      birthdate: birthDisplay,
-      sport: selectedSports.map(x => x.value),
-      other: selectedOthers.map(x => x.value),
-      ts: Date.now()
-    };
-
-    const updates = {};
-    updates['votes/' + birthKey] = vote;
-    updates['deviceVotes/' + DEVICE_ID] = {
-      birthdate: birthDisplay,
-      ts: Date.now()
-    };
-
-    await db.ref().update(updates);
-
-    document.body.innerHTML =
-      '<h2 style="text-align:center;margin-top:50px;">Danke für deine Stimme!</h2>';
-
-  } catch (err) {
-    console.error('Fehler beim Speichern der Stimme:', err);
-    alert('Beim Speichern ist ein Fehler aufgetreten. Bitte später erneut versuchen oder die Wahlleitung informieren.');
-    btn.disabled = false;
-    statusEl.textContent = '';
-  }
-}
-
 // ===================== Initialisierung =====================
 renderOptions(sportOptions, 'sports', 'sport');
 renderOptions(otherOptions, 'others', 'other');
-checkExistingVote();
 </script>
 
 </body>
 </html>
+
