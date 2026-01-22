@@ -118,11 +118,10 @@
     <h1>FC-Betenmacher – Bewerbswahl</h1>
     <p class="note">
       Es werden 3 Bewerbe aus der Kategorie <strong>"Sportarten"</strong> und 3 Bewerbe aus der Kategorie <strong>"Sonstiges"</strong> gewählt <br>
-	Der Ersatzbewerb ist jener Bewerb, der innerhalb einer der beiden Kategorien die nächstmeisten Stimmen erhalten hat <br><br>
-	Bitte wähle <strong>genau 3 Sportarten</strong> und <strong>genau 3 Sonstiges</strong>.<br><br>
+      Der Ersatzbewerb ist jener Bewerb, der innerhalb einer der beiden Kategorien die nächstmeisten Stimmen erhalten hat <br><br>
+      Bitte wähle <strong>genau 3 Sportarten</strong> und <strong>genau 3 Sonstiges</strong>.<br><br>
       Durchgestrichene Bewerbe sind aufgrund der 3 Jahres Regel gesperrt <br>
-	<strong>( ² )</strong> Der Bewerb mit mehr Stimmen in der Kategorie gilt als gewählt
-	
+      <strong>( ² )</strong> Der Bewerb mit mehr Stimmen in der Kategorie gilt als gewählt
     </p>
   </div>
 
@@ -130,7 +129,7 @@
     <div class="birth-wrapper">
       <label>
         <strong>Geburtsdatum eingeben (TTMMJJJJ):</strong><br>
-        <input id="birthdate" maxlength="10" placeholder="TTMMJJJJ">
+        <input id="birthdate" maxlength="10" placeholder="TTMMJJJJ" autocomplete="off">
       </label>
       <p class="birth-hint">
         Das Geburtsdatum dient ausschließlich der anonymen Einmal-Abstimmung.
@@ -165,6 +164,22 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
+
+// ===================== Device-ID pro Gerät =====================
+function getDeviceId() {
+  const KEY = 'fc_betenmacher_device_id';
+  let id = localStorage.getItem(KEY);
+  if (!id) {
+    if (window.crypto && crypto.randomUUID) {
+      id = crypto.randomUUID();
+    } else {
+      id = 'dev-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    }
+    localStorage.setItem(KEY, id);
+  }
+  return id;
+}
+const DEVICE_ID = getDeviceId();
 
 // ===================== Optionen =====================
 const sportOptions = [
@@ -247,11 +262,167 @@ function renderOptions(list, containerId, type) {
   });
 }
 
+// ===================== Geburtsdatum: nur Zahlen, Auto-Format TT-MM-JJJJ =====================
+document.addEventListener('DOMContentLoaded', () => {
+  const birthField = document.getElementById('birthdate');
+  if (!birthField) return;
+
+  birthField.addEventListener('input', (e) => {
+    let v = e.target.value;
+    v = v.replace(/\D/g, '');
+    if (v.length > 8) v = v.slice(0, 8);
+
+    let formatted = v;
+    if (v.length > 4) {
+      formatted = v.slice(0,2) + '-' + v.slice(2,4) + '-' + v.slice(4);
+    } else if (v.length > 2) {
+      formatted = v.slice(0,2) + '-' + v.slice(2);
+    }
+    e.target.value = formatted;
+  });
+});
+
+// Hilfsfunktion: TT-MM-JJJJ -> Validierung + YYYY-MM-DD
+function parseBirthdate(input) {
+  const m = /^(\d{2})-(\d{2})-(\d{4})$/.exec(input);
+  if (!m) return null;
+  const dd = parseInt(m[1], 10);
+  const mm = parseInt(m[2], 10);
+  const yyyy = parseInt(m[3], 10);
+
+  if (mm < 1 || mm > 12) return null;
+  if (dd < 1 || dd > 31) return null;
+
+  const d = new Date(yyyy, mm - 1, dd);
+  if (d.getFullYear() !== yyyy || d.getMonth() !== (mm - 1) || d.getDate() !== dd) return null;
+
+  const iso = `${yyyy.toString().padStart(4,'0')}-${mm.toString().padStart(2,'0')}-${dd.toString().padStart(2,'0')}`;
+  return { display: input, key: iso };
+}
+
+// ===================== Gerät hat schon abgestimmt? =====================
+function checkExistingVote() {
+  const deviceRef = db.ref('deviceVotes/' + DEVICE_ID);
+  deviceRef.once('value').then(snap => {
+    if (snap.exists()) {
+      const banner = document.createElement('div');
+      banner.className = 'info-banner';
+      banner.textContent = 'Du hast bereits abgestimmt. Vielen Dank!';
+      const container = document.getElementById('pageContainer');
+      container.insertBefore(banner, container.firstChild);
+
+      const btn = document.getElementById('btnSubmit');
+      if (btn) btn.disabled = true;
+    }
+  }).catch(err => {
+    console.error('Fehler beim Prüfen von deviceVotes:', err);
+  });
+}
+
+// ===================== Abstimmung senden =====================
+async function submitVote() {
+  const selectedSports = [...document.querySelectorAll('[data-type=sport]:checked')];
+  const selectedOthers = [...document.querySelectorAll('[data-type=other]:checked')];
+  const birthField = document.getElementById('birthdate');
+  const birthRaw = birthField ? birthField.value.trim() : '';
+  const statusEl = document.getElementById('status');
+  const btn = document.getElementById('btnSubmit');
+
+  statusEl.textContent = '';
+
+  if (!birthRaw) {
+    alert('Bitte gib dein Geburtsdatum ein (TTMMJJJJ).');
+    return;
+  }
+
+  const parsed = parseBirthdate(birthRaw);
+  if (!parsed) {
+    alert('Das Geburtsdatum ist ungültig. Bitte im Format TTMMJJJJ eingeben.');
+    return;
+  }
+
+  const birthDisplay = parsed.display; // TT-MM-JJJJ
+  const birthKey = parsed.key;        // YYYY-MM-DD
+
+  if (selectedSports.length !== 3 || selectedOthers.length !== 3) {
+    alert('Bitte genau 3 Sportarten und genau 3 Sonstiges auswählen.');
+    return;
+  }
+
+  btn.disabled = true;
+  statusEl.textContent = 'Bitte warten, Stimme wird geprüft …';
+
+  try {
+    // 1) Gerät schon abgestimmt?
+    const deviceSnap = await db.ref('deviceVotes/' + DEVICE_ID).once('value');
+    if (deviceSnap.exists()) {
+      alert('Dieses Gerät hat bereits abgestimmt. Mehrfach-Abstimmungen sind nicht erlaubt.');
+      btn.disabled = false;
+      statusEl.textContent = '';
+      return;
+    }
+
+    // 2) Anwesenheit prüfen
+    let presentSnap;
+    try {
+      presentSnap = await db.ref('present/' + birthKey).once('value');
+    } catch (err) {
+      console.error('Fehler beim Lesen von /present:', err);
+      alert('Interner Fehler: Anwesenheitsliste konnte nicht geprüft werden. Bitte wende dich an die Wahlleitung.');
+      btn.disabled = false;
+      statusEl.textContent = '';
+      return;
+    }
+
+    if (!presentSnap.exists()) {
+      alert('Du bist für diese Abstimmung nicht als anwesend markiert. Bitte melde dich bei der Wahlleitung.');
+      btn.disabled = false;
+      statusEl.textContent = '';
+      return;
+    }
+
+    // 3) Für dieses Geburtsdatum schon eine Stimme?
+    const voteSnap = await db.ref('votes/' + birthKey).once('value');
+    if (voteSnap.exists()) {
+      alert('Für dieses Geburtsdatum wurde bereits eine Stimme abgegeben.');
+      btn.disabled = false;
+      statusEl.textContent = '';
+      return;
+    }
+
+    // 4) Alles OK -> speichern
+    const vote = {
+      birthdate: birthDisplay,
+      sport: selectedSports.map(x => x.value),
+      other: selectedOthers.map(x => x.value),
+      ts: Date.now()
+    };
+
+    const updates = {};
+    updates['votes/' + birthKey] = vote;
+    updates['deviceVotes/' + DEVICE_ID] = {
+      birthdate: birthDisplay,
+      ts: Date.now()
+    };
+
+    await db.ref().update(updates);
+
+    document.body.innerHTML =
+      '<h2 style="text-align:center;margin-top:50px;">Danke für deine Stimme!</h2>';
+
+  } catch (err) {
+    console.error('Fehler beim Speichern der Stimme:', err);
+    alert('Beim Speichern ist ein Fehler aufgetreten. Bitte später erneut versuchen oder die Wahlleitung informieren.');
+    btn.disabled = false;
+    statusEl.textContent = '';
+  }
+}
+
 // ===================== Initialisierung =====================
 renderOptions(sportOptions, 'sports', 'sport');
 renderOptions(otherOptions, 'others', 'other');
+checkExistingVote();
 </script>
 
 </body>
 </html>
-
