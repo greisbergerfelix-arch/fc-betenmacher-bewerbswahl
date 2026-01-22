@@ -91,9 +91,6 @@
     </div>
   </div>
 
-  <div class="card button-row">
-    <button class="danger" onclick="resetAll()">⚠ Alle Stimmen zurücksetzen</button>
-  </div>
 </div>
 
 <script>
@@ -293,29 +290,6 @@ function loadData() {
 }
 
 loadData();
-
-/* ===================== Reset ===================== */
-async function resetAll() {
-  const pw = prompt("Bitte Administrations-Passwort eingeben:");
-  if (pw !== "s3rv1c31") {
-    if (pw !== null) alert("Passwort falsch. Vorgang abgebrochen.");
-    return;
-  }
-
-  if (!confirm("Wirklich ALLE Stimmen unwiderruflich löschen?")) return;
-
-  try {
-    // optional: auch deviceVotes löschen, sonst blockiert es weitere Votes pro Gerät
-    await db.ref().update({
-      votes: null,
-      deviceVotes: null
-    });
-    alert("Zurückgesetzt.");
-  } catch (err) {
-    console.error("Reset Fehler:", err);
-    alert("Reset fehlgeschlagen: " + (err && err.message ? err.message : err));
-  }
-}
 </script>
 </body>
 </html>
