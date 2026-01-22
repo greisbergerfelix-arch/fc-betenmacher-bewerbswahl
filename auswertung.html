@@ -45,18 +45,6 @@
     .chart-wrapper {
       height:450px;
     }
-    .button-row {
-      text-align:center;
-      margin-top:10px;
-    }
-    button {
-      padding:12px 24px;
-      border:none;
-      border-radius:10px;
-      font-size:20px;
-      cursor:pointer;
-    }
-    .danger { background:#dc2626; color:#fff; }
 
     /* Statuszeile */
     #status {
@@ -123,12 +111,11 @@ const valueLabelPlugin = {
     const meta = chart.getDatasetMeta(0);
     const data = chart.data;
 
-    // falls leer
     if (!meta || !meta.data || meta.data.length === 0) return;
 
     ctx.save();
     ctx.font = '16px Arial';
-    ctx.fillStyle = '#000';          // Textfarbe im Balken
+    ctx.fillStyle = '#000';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
@@ -138,7 +125,6 @@ const valueLabelPlugin = {
       const suffix = (data.suffixes && data.suffixes[i]) ? data.suffixes[i] : "";
       const text = `${label} (${value})${suffix}`;
 
-      // horizontal bar: bar.x ist rechts, bar.base links
       const centerX = (bar.x + bar.base) / 2;
       const centerY = bar.y;
 
@@ -175,13 +161,18 @@ function computeCounts(votesObj) {
   return { sport, other, total };
 }
 
-function pickErsatz(entries) {
-  // ersatz = bestes Element außerhalb Top 3
-  const rest = entries.slice(3);
-  if (rest.length === 0) return null;
-  return rest[0][0]; // weil entries schon nach count sortiert ist
+function pickOverallErsatz(sportEntries, otherEntries) {
+  const sportRest = sportEntries.slice(3).map(([label, count]) => ({ cat: "sport", label, count }));
+  const otherRest = otherEntries.slice(3).map(([label, count]) => ({ cat: "other", label, count }));
+
+  const candidates = sportRest.concat(otherRest);
+  if (candidates.length === 0) return null;
+
+  candidates.sort((a, b) => b.count - a.count || String(a.label).localeCompare(String(b.label), 'de'));
+  return candidates[0]; // {cat,label,count}
 }
 
+/* ====== NEU: Farb-/Suffix-Logik (Top3 grün, 1 globaler Ersatz gelb, Rest grau) ====== */
 function prepareData(entries, ersatzName) {
   const labels = entries.map(e => e[0]);
   const values = entries.map(e => e[1]);
@@ -194,10 +185,9 @@ function prepareData(entries, ersatzName) {
     if (ersatzName && label === ersatzName) suffix = " (Ersatzbewerb)";
     suffixes.push(suffix);
 
-    // Farblogik wie bei dir:
-    if (i < 3) colors.push("rgba(34,197,94,0.85)");
-    else if (ersatzName && label === ersatzName) colors.push("rgba(234,179,8,0.9)");
-    else colors.push("rgba(148,163,184,0.9)");
+    if (i < 3) colors.push("rgba(34,197,94,0.85)");                 // Top 3 grün
+    else if (ersatzName && label === ersatzName) colors.push("rgba(234,179,8,0.9)"); // genau 1 gelb
+    else colors.push("rgba(148,163,184,0.9)");                       // Rest grau
   });
 
   return { labels, values, colors, suffixes };
@@ -217,8 +207,8 @@ function drawChart(id, entries, type, ersatzName) {
     type: "bar",
     data: {
       labels,
-      originalLabels: labels, // für Plugin
-      suffixes,               // für Plugin
+      originalLabels: labels,
+      suffixes,
       datasets: [{
         data: values,
         backgroundColor: colors
@@ -261,7 +251,6 @@ function drawChart(id, entries, type, ersatzName) {
 function loadData() {
   setStatus("Verbinde mit Datenbank …");
 
-  // Wichtig: mit Error-Callback, damit du echte Permission-Fehler siehst
   db.ref('votes').on('value',
     (snap) => {
       const votes = snap.val() || {};
@@ -272,18 +261,18 @@ function loadData() {
       const sportEntries = sortEntries(sport);
       const otherEntries = sortEntries(other);
 
-      const ersatzSport = pickErsatz(sportEntries);
-      const ersatzOther = pickErsatz(otherEntries);
+      // genau 1 Ersatzbewerb insgesamt (bester außerhalb Top 3 aus beiden Kategorien)
+      const ersatz = pickOverallErsatz(sportEntries, otherEntries);
 
-      drawChart("sportChart", sportEntries, "sport", ersatzSport);
-      drawChart("otherChart", otherEntries, "other", ersatzOther);
+      // Beide Charts zeigen ALLE Einträge, aber nur EINE Kategorie bekommt den gelben Ersatz
+      drawChart("sportChart", sportEntries, "sport", ersatz && ersatz.cat === "sport" ? ersatz.label : null);
+      drawChart("otherChart", otherEntries, "other", ersatz && ersatz.cat === "other" ? ersatz.label : null);
 
       setStatus("Live-Stand: " + new Date().toLocaleString('de-AT'));
     },
     (err) => {
       console.error("Fehler beim Lesen von /votes:", err);
       document.getElementById('count').innerText = 'Fehler beim Laden.';
-      // Das ist der entscheidende Hinweis, wenn Regeln blockieren:
       setStatus("Fehler: " + (err && err.message ? err.message : "Keine Berechtigung (Rules) oder Netzwerkproblem."));
     }
   );
