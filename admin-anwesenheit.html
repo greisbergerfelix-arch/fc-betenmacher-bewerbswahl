@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>FC-Betenmacher – Anwesenheit Mitglieder</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background:#f4f6f8;
+      margin:0;
+      padding:20px;
+    }
+    .container {
+      max-width:900px;
+      margin:0 auto;
+    }
+    .card {
+      background:#fff;
+      padding:20px;
+      border-radius:12px;
+      box-shadow:0 4px 10px rgba(0,0,0,0.08);
+      margin-bottom:20px;
+    }
+    h1 {
+      text-align:center;
+      margin-top:0;
+    }
+    table {
+      width:100%;
+      border-collapse:collapse;
+      font-size:14px;
+    }
+    th, td {
+      padding:6px 8px;
+      border-bottom:1px solid #e5e7eb;
+      text-align:left;
+      white-space:nowrap;
+    }
+    th {
+      background:#f3f4f6;
+      font-weight:600;
+    }
+    tr:nth-child(even) td {
+      background:#f9fafb;
+    }
+    .muted {
+      color:#6b7280;
+      font-size:13px;
+    }
+    button {
+      padding:8px 14px;
+      border:none;
+      border-radius:8px;
+      background:#2563eb;
+      color:#fff;
+      font-size:14px;
+      cursor:pointer;
+    }
+    button:disabled {
+      opacity:0.6;
+      cursor:default;
+    }
+    .summary span {
+      display:inline-block;
+      margin-right:15px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <div class="card">
+    <h1>Anwesenheit – Mitglieder</h1>
+    <p class="muted">
+      Markiere hier, welche Mitglieder bei der Abstimmung anwesend sind. Nur für diese Geburtsdaten ist die Stimmabgabe möglich.
+    </p>
+    <div class="summary">
+      <span><strong>Gesamt:</strong> <span id="totalMembers">–</span></span>
+      <span><strong>Anwesend:</strong> <span id="presentCount">–</span></span>
+      <span><strong>Abwesend:</strong> <span id="absentCount">–</span></span>
+    </div>
+    <div style="margin-top:10px;">
+      <button id="btnSave" onclick="savePresence()">Anwesenheit speichern</button>
+      <span id="status" class="muted"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Mitgliederliste</h2>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+        <tr>
+          <th>#</th>
+          <th>Nachname</th>
+          <th>Vorname</th>
+          <th>Anwesend</th>
+        </tr>
+        </thead>
+        <tbody id="tableMembers">
+        <tr><td colspan="4" class="muted">Daten werden geladen …</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ========== Firebase-Konfiguration ==========
+const firebaseConfig = {
+  apiKey: "AIzaSyCRkIU7F42QPrs2oMOymQxF4MVKM7oQZTw",
+  authDomain: "fc-betenmacher-bewerbswa-b44e4.firebaseapp.com",
+  databaseURL: "https://fc-betenmacher-bewerbswa-b44e4-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "fc-betenmacher-bewerbswa-b44e4",
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// ========== Mitgliederliste als CSV (Nr;Nachname;Vorname;Geburtsdatum) ==========
+const membersCsv = `
+1;Anglberger;Lukas;05.08.2001
+2;Auswöger;Alexander;07.10.1982
+3;Auswöger;Mario;25.07.1981
+4;Bormann;Heiko;12.02.1977
+5;Brandstätter;Fabian;16.04.1998
+6;Eisl;Karl;24.05.1961
+7;Enzesberger;Alois;21.12.1991
+8;Enzesberger;Gerhard sen.;26.08.1961
+9;Enzesberger;Gerhard jun.;14.02.1987
+10;Eppenschwandtner;Franz;28.05.1961
+11;Eppenschwandtner;Georg;23.02.1979
+12;Eppenschwandtner;Stefan;14.09.1986
+13;Feistritzer;Philipp;20.01.1982
+14;Greinz-Einberger;Andreas;20.06.1988
+15;Greinz-Einberger;Ferdinand;08.08.1961
+16;Greinz-Einberger;Lukas;20.09.2001
+17;Greisberger;Andreas;21.06.1996
+18;Greisberger;Felix (Freez);04.05.1987
+19;Greisberger;Franz;28.11.1960
+20;Greisberger;Georg;18.04.1983
+21;Greisberger;Jakob;14.08.2002
+22;Greisberger;Thomas;03.01.1984
+23;Greisberger;Toni;19.12.1960
+24;Gruber;Bernhard;06.09.1993
+25;Gruber;Matthias;21.12.1960
+26;Grubinger;Gerhard;11.06.1973
+27;Grubinger;John;02.10.1971
+28;Lemberger;Norbert;23.07.1994
+29;Lichtmannsperger;Martin;20.02.1971
+30;Meindl;Martin;01.02.1978
+31;Niederbrucker;Hans;04.06.1944
+32;Niederbrucker;Hans-Jürgen;02.02.1975
+33;Oberascher;Ferdinand;29.11.1960
+34;Oberascher;Patrick;05.07.1995
+35;Oberascher;Sebastian;21.02.1967
+36;Pichler;David;20.07.1985
+37;Reiter;Roland;12.01.1978
+38;Schmidhuber;Andreas;03.06.1988
+39;Schmidhuber;Florian;25.04.1990
+40;Schmidhuber;Simon;15.12.2000
+41;Schoosleitner;Christian;22.02.1987
+42;Schoosleitner;Michael;14.02.1983
+43;Schoosleitner;Josef;20.03.1960
+44;Stöllinger;Hans;14.04.1960
+45;Strumegger;Benedikt;28.08.1988
+46;Strumegger;Bernhard;09.08.1970
+47;Strumegger;Felix (Fedda);04.11.1998
+48;Strumegger;Florian;16.06.1976
+49;Strumegger;Josef;27.01.1958
+50;Strumegger;Sebastian;15.04.1991
+51;Wesenauer;Karl;09.05.1961
+52;Willroider;Herbert;08.05.1960
+53;Winkler;Robert;09.05.1995
+54;Zoister;Andreas;26.03.1990
+55;Schmidhuber;Natanael;25.01.2007
+`.trim();
+
+const members = membersCsv.split('\n').map(line => {
+  const [nr, last, first, birth] = line.split(';');
+  return {
+    nr: parseInt(nr, 10),
+    last: last.trim(),
+    first: first.trim(),
+    birth: birth.trim()
+  };
+});
+
+// Hilfsfunktion: DD.MM.YYYY -> YYYY-MM-DD
+function birthToKey(birth) {
+  const p = birth.split('.');
+  return `${p[2]}-${p[1]}-${p[0]}`;
+}
+
+function updateSummary() {
+  const totalMembersEl = document.getElementById('totalMembers');
+  const presentCountEl = document.getElementById('presentCount');
+  const absentCountEl  = document.getElementById('absentCount');
+  const checkboxes = document.querySelectorAll('.present-checkbox');
+
+  totalMembersEl.textContent = members.length.toString();
+
+  let present = 0;
+  checkboxes.forEach(cb => { if (cb.checked) present++; });
+  presentCountEl.textContent = present.toString();
+  absentCountEl.textContent  = (members.length - present).toString();
+}
+
+function renderTable(presentMap) {
+  const tbody = document.getElementById('tableMembers');
+  tbody.innerHTML = '';
+
+  members.sort((a,b)=>a.nr-b.nr).forEach(m => {
+    const birthKey = birthToKey(m.birth);
+    const checked = !!presentMap[birthKey];
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${m.nr}</td>
+      <td>${m.last}</td>
+      <td>${m.first}</td>
+      <td>
+        <input type="checkbox"
+               class="present-checkbox"
+               data-birthkey="${birthKey}"
+               ${checked ? 'checked' : ''}>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  document.querySelectorAll('.present-checkbox').forEach(cb => {
+    cb.addEventListener('change', updateSummary);
+  });
+
+  updateSummary();
+}
+
+function loadPresence() {
+  const tbody = document.getElementById('tableMembers');
+  tbody.innerHTML = '<tr><td colspan="4" class="muted">Daten werden geladen …</td></tr>';
+
+  db.ref('present').once('value')
+    .then(snap => {
+      const presentMap = snap.val() || {};
+      renderTable(presentMap);
+    })
+    .catch(err => {
+      console.error('Fehler beim Lesen von /present:', err);
+      renderTable({}); // ohne Markierungen weiterarbeiten
+    });
+}
+
+function savePresence() {
+  const statusEl = document.getElementById('status');
+  const btn = document.getElementById('btnSave');
+  btn.disabled = true;
+  statusEl.textContent = 'Speichern …';
+
+  const checkboxes = document.querySelectorAll('.present-checkbox');
+  const presentMap = {};
+  checkboxes.forEach(cb => {
+    if (cb.checked) {
+      const key = cb.getAttribute('data-birthkey');
+      presentMap[key] = true;
+    }
+  });
+
+  db.ref('present').set(presentMap).then(() => {
+    statusEl.textContent = 'Anwesenheit gespeichert.';
+    btn.disabled = false;
+  }).catch(err => {
+    console.error(err);
+    statusEl.textContent = 'Fehler beim Speichern.';
+    btn.disabled = false;
+  });
+}
+
+loadPresence();
+</script>
+
+</body>
+</html>

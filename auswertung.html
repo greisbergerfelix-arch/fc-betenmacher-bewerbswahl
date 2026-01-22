@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>FC-Betenmacher – Auswertung (Beamer)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background:#000;
+      color:#fff;
+      margin:0;
+      padding:0;
+    }
+    .container {
+      max-width:1400px;
+      margin:0 auto;
+      padding:20px 40px;
+    }
+    h1 {
+      text-align:center;
+      font-size:42px;
+      margin:10px 0 5px;
+    }
+    h2 {
+      text-align:center;
+      font-size:28px;
+      margin:10px 0 5px;
+    }
+    #count {
+      font-size:26px;
+      text-align:center;
+      margin-top:10px;
+    }
+    .card {
+      background:transparent;
+      border:none;
+      margin-bottom:40px;
+    }
+    .chart-wrapper {
+      height:450px;
+    }
+    .button-row {
+      text-align:center;
+      margin-top:10px;
+    }
+    button {
+      padding:12px 24px;
+      border:none;
+      border-radius:10px;
+      font-size:20px;
+      cursor:pointer;
+    }
+    .danger { background:#dc2626; color:#fff; }
+  </style>
+</head>
+<body>
+
+<div id="app" class="container">
+  <h1>FC-Betenmacher – Auswertung</h1>
+
+  <div class="card">
+    <p id="count"></p>
+  </div>
+
+  <div class="card">
+    <h2>Sportarten</h2>
+    <div class="chart-wrapper">
+      <canvas id="sportChart"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Sonstiges</h2>
+    <div class="chart-wrapper">
+      <canvas id="otherChart"></canvas>
+    </div>
+  </div>
+
+  <div class="card button-row">
+    <button class="danger" onclick="resetAll()">⚠ Alle Stimmen zurücksetzen</button>
+  </div>
+</div>
+
+<script>
+// Firebase Konfiguration
+const firebaseConfig = {
+  apiKey: "AIzaSyCRkIU7F42QPrs2oMOymQxF4MVKM7oQZTw",
+  authDomain: "fc-betenmacher-bewerbswa-b44e4.firebaseapp.com",
+  databaseURL: "https://fc-betenmacher-bewerbswa-b44e4-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "fc-betenmacher-bewerbswa-b44e4",
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+let sportChart, otherChart;
+
+// Text im Balken (Name + Stimmen)
+const valueLabelPlugin = {
+  id: 'valueLabel',
+  afterDatasetsDraw(chart) {
+    const {ctx} = chart;
+    const meta = chart.getDatasetMeta(0);
+    const data = chart.data;
+    ctx.save();
+    ctx.font = '16px Arial';
+    ctx.fillStyle = '#000';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    meta.data.forEach((bar, i) => {
+      const value = data.datasets[0].data[i];
+      const label = data.originalLabels[i];
+      const suffix = data.suffixes[i] || "";
+      const text = `${label} (${value})${suffix}`;
+
+      const centerX = (bar.x + bar.base) / 2;
+      const centerY = bar.y;
+      ctx.fillText(text, centerX, centerY);
+    });
+
+    ctx.restore();
+  }
+};
+
+function sortEntries(obj) {
+  return Object.entries(obj).sort((a, b) => b[1] - a[1]);
+}
+
+function loadData() {
+  db.ref('votes').on('value', snap => {
+    const votes = snap.val() || {};
+    const sport = {};
+    const other = {};
+    let total = 0;
+
+    Object.values(votes).forEach(v => {
+      total++;
+      (v.sport || []).forEach(s => sport[s] = (sport[s] || 0) + 1);
+      (v.other || []).forEach(o => other[o] = (other[o] || 0) + 1);
+    });
+
+    document.getElementById('count').innerText = 'Abgegebene Stimmen: ' + total;
+
+    const sportEntries = sortEntries(sport);
+    const otherEntries = sortEntries(other);
+
+    const candidates = [];
+    sportEntries.slice(3).forEach(([n,c]) => candidates.push({cat:"sport",name:n,count:c}));
+    otherEntries.slice(3).forEach(([n,c]) => candidates.push({cat:"other",name:n,count:c}));
+
+    let ersatzSport = null, ersatzOther = null;
+    if (candidates.length > 0) {
+      let best = candidates.reduce((a,b)=>a.count>b.count?a:b);
+      if (best.cat === "sport") ersatzSport = best.name;
+      else ersatzOther = best.name;
+    }
+
+    drawChart("sportChart", sportEntries, "sport", ersatzSport);
+    drawChart("otherChart", otherEntries, "other", ersatzOther);
+  });
+}
+
+function prepareData(entries, ersatzName) {
+  const labels = entries.map(e => e[0]);
+  const values = entries.map(e => e[1]);
+
+  const suffixes = [];
+  const colors = [];
+
+  labels.forEach((label, i) => {
+    let suffix = "";
+    if (label === ersatzName) suffix = " (Ersatzbewerb)";
+    suffixes.push(suffix);
+
+    if (i < 3) colors.push("rgba(34,197,94,0.85)");
+    else if (label === ersatzName) colors.push("rgba(234,179,8,0.9)");
+    else colors.push("rgba(148,163,184,0.9)");
+  });
+
+  return { labels, values, colors, suffixes };
+}
+
+function drawChart(id, entries, type, ersatzName) {
+  if (type === "sport" && sportChart) sportChart.destroy();
+  if (type === "other" && otherChart) otherChart.destroy();
+
+  const { labels, values, colors, suffixes } = prepareData(entries, ersatzName);
+  const ctx = document.getElementById(id).getContext("2d");
+
+  const chart = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels,
+      originalLabels: labels,
+      suffixes,
+      datasets: [{
+        data: values,
+        backgroundColor: colors
+        // keine barThickness -> Abstand über categoryPercentage/barPercentage
+      }]
+    },
+    options: {
+      indexAxis: "y",
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display:false },
+        tooltip:{ enabled:true }
+      },
+      scales: {
+        x: {
+          beginAtZero:true,
+          ticks:{ display:false },
+          grid:{ display:false }
+        },
+        y: {
+          ticks: {
+            color:"#fff",
+            callback:(v,i)=> (i<3 ? (i+1) : "")
+          },
+          categoryPercentage: 0.6, // kleiner => mehr Abstand
+          barPercentage: 0.8,      // Balken etwas schmaler
+          grid:{ display:false }
+        }
+      }
+    },
+    plugins:[valueLabelPlugin]
+  });
+
+  if (type==="sport") sportChart = chart;
+  else otherChart = chart;
+}
+
+loadData();
+
+function resetAll() {
+  const pw = prompt("Bitte Administrations-Passwort eingeben:");
+  if (pw !== "s3rv1c31") {
+    if (pw !== null) alert("Passwort falsch. Vorgang abgebrochen.");
+    return;
+  }
+  if (!confirm("Wirklich ALLE Stimmen unwiderruflich löschen?")) return;
+  db.ref("votes").remove();
+}
+</script>
+</body>
+</html>

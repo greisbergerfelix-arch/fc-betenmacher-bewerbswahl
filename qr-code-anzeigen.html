@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>QR-Code anzeigen – FC-Betenmacher</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background:#f4f6f8;
+      margin:0;
+      padding:20px;
+    }
+    .container {
+      max-width:600px;
+      margin:0 auto;
+      background:#fff;
+      border-radius:12px;
+      box-shadow:0 4px 10px rgba(0,0,0,0.08);
+      padding:20px;
+      text-align:center;
+    }
+    h1 {
+      margin-top:0;
+      margin-bottom:10px;
+    }
+    #qr {
+      max-width:260px;
+      width:100%;
+      height:auto;
+      margin:20px auto;
+      display:block;
+    }
+    .votes {
+      font-size:18px;
+      margin-top:10px;
+      font-weight:bold;
+    }
+    .btn-end {
+      margin-top:20px;
+      padding:10px 16px;
+      font-size:16px;
+      background:#dc2626;
+      color:#fff;
+      border:none;
+      border-radius:8px;
+      cursor:pointer;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>QR-Code – Bewerbswahl</h1>
+  <p>Scanne den Code, um zur Abstimmungsseite zu gelangen.</p>
+
+  <img id="qr" alt="QR-Code zur Bewerbswahl" />
+
+  <p class="votes">Bisher abgegebene Stimmen: <span id="count">–</span></p>
+
+  <!-- Button mit direkter Weiterleitung -->
+  <button class="btn-end" onclick="endVoting()">Abstimmung beenden</button>
+</div>
+
+<script>
+  // Firebase-Konfiguration
+  const firebaseConfig = {
+    apiKey: "AIzaSyCRkIU7F42QPrs2oMOymQxF4MVKM7oQZTw",
+    authDomain: "fc-betenmacher-bewerbswa-b44e4.firebaseapp.com",
+    databaseURL: "https://fc-betenmacher-bewerbswa-b44e4-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "fc-betenmacher-bewerbswa-b44e4",
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+
+  // QR-Code generieren
+  const url = "https://fc-betenmacher-bewerbswa-b44e4.web.app/";
+  document.getElementById('qr').src =
+    "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=" +
+    encodeURIComponent(url);
+
+  // Stimmen auslesen
+  const countSpan = document.getElementById('count');
+  db.ref('votes').on('value', snap => {
+    const votes = snap.val() || {};
+    countSpan.textContent = Object.keys(votes).length;
+  });
+
+  // Weiterleitung zur Auswertung (gehostet)
+  function endVoting() {
+    window.location.href = "https://fc-betenmacher-bewerbswa-b44e4.web.app/auswertung.html";
+  }
+</script>
+</body>
+</html>
