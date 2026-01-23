@@ -45,13 +45,11 @@
     .chart-wrapper {
       height:450px;
     }
-
-    /* Statuszeile */
     #status {
       text-align:center;
       font-size:16px;
       opacity:0.9;
-      margin-top: 8px;
+      margin-top:8px;
     }
   </style>
 </head>
@@ -78,7 +76,6 @@
       <canvas id="otherChart"></canvas>
     </div>
   </div>
-
 </div>
 
 <script>
@@ -89,7 +86,6 @@ const firebaseConfig = {
   databaseURL: "https://fc-betenmacher-bewerbswa-b44e4-default-rtdb.europe-west1.firebasedatabase.app",
   projectId: "fc-betenmacher-bewerbswa-b44e4",
 };
-
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
@@ -99,19 +95,19 @@ let otherChart = null;
 
 function setStatus(text) {
   const el = document.getElementById('status');
-  if (!el) return;
-  el.textContent = text || "";
+  if (el) el.textContent = text || "";
 }
 
-/* ===================== Plugin: Text im Balken ===================== */
+/* ===================== Plugin: Text IM Balken (erst wenn Balken fertig) ===================== */
 const valueLabelPlugin = {
   id: 'valueLabel',
   afterDatasetsDraw(chart) {
     const { ctx } = chart;
     const meta = chart.getDatasetMeta(0);
     const data = chart.data;
-
     if (!meta || !meta.data || meta.data.length === 0) return;
+
+    const xScale = chart.scales.x;
 
     ctx.save();
     ctx.font = '16px Arial';
@@ -121,13 +117,17 @@ const valueLabelPlugin = {
 
     meta.data.forEach((bar, i) => {
       const value = data.datasets[0].data[i];
-      const label = (data.originalLabels && data.originalLabels[i]) ? data.originalLabels[i] : data.labels[i];
+      const label = data.labels[i];
       const suffix = (data.suffixes && data.suffixes[i]) ? data.suffixes[i] : "";
       const text = `${label} (${value})${suffix}`;
 
+      // Nur anzeigen, wenn der Balken wirklich am Ziel ist
+      const targetX = xScale.getPixelForValue(value);
+      const tolerance = 1.5; // Pixel-Toleranz
+      if (Math.abs(bar.x - targetX) > tolerance) return;
+
       const centerX = (bar.x + bar.base) / 2;
       const centerY = bar.y;
-
       ctx.fillText(text, centerX, centerY);
     });
 
@@ -140,10 +140,7 @@ function sortEntries(obj) {
   return Object.entries(obj)
     .sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0]), 'de'));
 }
-
-function safeArray(x) {
-  return Array.isArray(x) ? x : [];
-}
+function safeArray(x) { return Array.isArray(x) ? x : []; }
 
 function computeCounts(votesObj) {
   const sport = {};
@@ -172,7 +169,7 @@ function pickOverallErsatz(sportEntries, otherEntries) {
   return candidates[0]; // {cat,label,count}
 }
 
-/* ====== NEU: Farb-/Suffix-Logik (Top3 grün, 1 globaler Ersatz gelb, Rest grau) ====== */
+/* ===================== Farben + Suffix ===================== */
 function prepareData(entries, ersatzName) {
   const labels = entries.map(e => e[0]);
   const values = entries.map(e => e[1]);
@@ -185,9 +182,9 @@ function prepareData(entries, ersatzName) {
     if (ersatzName && label === ersatzName) suffix = " (Ersatzbewerb)";
     suffixes.push(suffix);
 
-    if (i < 3) colors.push("rgba(34,197,94,0.85)");                 // Top 3 grün
-    else if (ersatzName && label === ersatzName) colors.push("rgba(234,179,8,0.9)"); // genau 1 gelb
-    else colors.push("rgba(148,163,184,0.9)");                       // Rest grau
+    if (i < 3) colors.push("rgba(34,197,94,0.85)");
+    else if (ersatzName && label === ersatzName) colors.push("rgba(234,179,8,0.9)");
+    else colors.push("rgba(148,163,184,0.9)");
   });
 
   return { labels, values, colors, suffixes };
@@ -199,6 +196,9 @@ function drawChart(id, entries, type, ersatzName) {
   if (type === "other" && otherChart) otherChart.destroy();
 
   const { labels, values, colors, suffixes } = prepareData(entries, ersatzName);
+  const ersatzIndex = ersatzName ? labels.indexOf(ersatzName) : -1;
+  const maxVal = Math.max(0, ...values);
+
   const canvas = document.getElementById(id);
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
@@ -207,7 +207,6 @@ function drawChart(id, entries, type, ersatzName) {
     type: "bar",
     data: {
       labels,
-      originalLabels: labels,
       suffixes,
       datasets: [{
         data: values,
@@ -218,10 +217,24 @@ function drawChart(id, entries, type, ersatzName) {
       indexAxis: "y",
       responsive: true,
       maintainAspectRatio: false,
-      animation: false,
+
+      // Balken mit wenig Stimmen schneller, Maximum ca. 15s
+      animations: {
+        x: {
+          from: 0,
+          duration: (ctx) => {
+            const v = Number(ctx.raw || 0);
+            if (!maxVal) return 0;
+            const ms = Math.round(15000 * (v / maxVal)); // <= HIER: 15000 = max. 15s
+            return Math.max(250, ms); // Minimum, damit man es sieht
+          }
+        },
+        y: { duration: 0 } // Position nicht animieren
+      },
+
       plugins: {
         legend: { display:false },
-        tooltip:{ enabled:true }
+        tooltip: { enabled:true }
       },
       scales: {
         x: {
@@ -231,11 +244,14 @@ function drawChart(id, entries, type, ersatzName) {
         },
         y: {
           ticks: {
-            color:"#fff",
-            callback:(v,i)=> (i < 3 ? (i+1) : "")
+            display: true,
+            color: "#fff",
+            callback: (v, i) => {
+              if (i < 3) return String(i + 1);      // 1,2,3 links
+              if (ersatzIndex === i) return "E";    // Ersatzbewerb
+              return "";                             // sonst nichts
+            }
           },
-          categoryPercentage: 0.6,
-          barPercentage: 0.8,
           grid:{ display:false }
         }
       }
@@ -247,38 +263,27 @@ function drawChart(id, entries, type, ersatzName) {
   else otherChart = chart;
 }
 
-/* ===================== Live Load ===================== */
-function loadData() {
-  setStatus("Verbinde mit Datenbank …");
+/* ===================== Load ===================== */
+db.ref('votes').once('value').then(snap => {
+  const votes = snap.val() || {};
+  const { sport, other, total } = computeCounts(votes);
 
-  db.ref('votes').on('value',
-    (snap) => {
-      const votes = snap.val() || {};
-      const { sport, other, total } = computeCounts(votes);
+  document.getElementById('count').innerText = 'Abgegebene Stimmen: ' + total;
 
-      document.getElementById('count').innerText = 'Abgegebene Stimmen: ' + total;
+  const sportEntries = sortEntries(sport);
+  const otherEntries = sortEntries(other);
 
-      const sportEntries = sortEntries(sport);
-      const otherEntries = sortEntries(other);
+  const ersatz = pickOverallErsatz(sportEntries, otherEntries);
 
-      // genau 1 Ersatzbewerb insgesamt (bester außerhalb Top 3 aus beiden Kategorien)
-      const ersatz = pickOverallErsatz(sportEntries, otherEntries);
+  drawChart("sportChart", sportEntries, "sport", ersatz && ersatz.cat === "sport" ? ersatz.label : null);
+  drawChart("otherChart", otherEntries, "other", ersatz && ersatz.cat === "other" ? ersatz.label : null);
 
-      // Beide Charts zeigen ALLE Einträge, aber nur EINE Kategorie bekommt den gelben Ersatz
-      drawChart("sportChart", sportEntries, "sport", ersatz && ersatz.cat === "sport" ? ersatz.label : null);
-      drawChart("otherChart", otherEntries, "other", ersatz && ersatz.cat === "other" ? ersatz.label : null);
-
-      setStatus("Live-Stand: " + new Date().toLocaleString('de-AT'));
-    },
-    (err) => {
-      console.error("Fehler beim Lesen von /votes:", err);
-      document.getElementById('count').innerText = 'Fehler beim Laden.';
-      setStatus("Fehler: " + (err && err.message ? err.message : "Keine Berechtigung (Rules) oder Netzwerkproblem."));
-    }
-  );
-}
-
-loadData();
+  setStatus("Stand: " + new Date().toLocaleString('de-AT'));
+}).catch(err => {
+  console.error("Fehler beim Lesen von /votes:", err);
+  document.getElementById('count').innerText = 'Fehler beim Laden.';
+  setStatus("Fehler: " + (err && err.message ? err.message : "Keine Berechtigung (Rules) oder Netzwerkproblem."));
+});
 </script>
 </body>
 </html>
