@@ -51,6 +51,22 @@
       opacity:0.9;
       margin-top:8px;
     }
+
+    /* CSV Export (neu, sonst nichts verändert) */
+    #exportWrap{
+      text-align:center;
+      margin: 20px 0 10px;
+    }
+    #exportCsv{
+      font-size:18px;
+      padding:10px 16px;
+      border-radius:10px;
+      border:1px solid rgba(255,255,255,.25);
+      background: rgba(255,255,255,.08);
+      color:#fff;
+      cursor:pointer;
+    }
+    #exportCsv:active{ transform: translateY(1px); }
   </style>
 </head>
 <body>
@@ -76,6 +92,11 @@
       <canvas id="otherChart"></canvas>
     </div>
   </div>
+
+  <!-- CSV Export (neu) -->
+  <div id="exportWrap">
+    <button id="exportCsv" type="button">CSV exportieren</button>
+  </div>
 </div>
 
 <script>
@@ -92,6 +113,16 @@ const db = firebase.database();
 /* ===================== State ===================== */
 let sportChart = null;
 let otherChart = null;
+
+/* CSV Export State (neu) */
+let __exportState = {
+  total: 0,
+  sportEntries: [],
+  otherEntries: [],
+  ersatzList: [],        // [{cat,label,count}, ...] (1 oder mehrere)
+  tie: false,
+  stand: ""
+};
 
 function setStatus(text) {
   const el = document.getElementById('status');
@@ -158,19 +189,28 @@ function computeCounts(votesObj) {
   return { sport, other, total };
 }
 
+/* Wenn Ersatzbewerb-Top aus Rest doppelt vorkommt (Tie), alle markieren */
 function pickOverallErsatz(sportEntries, otherEntries) {
   const sportRest = sportEntries.slice(3).map(([label, count]) => ({ cat: "sport", label, count }));
   const otherRest = otherEntries.slice(3).map(([label, count]) => ({ cat: "other", label, count }));
 
   const candidates = sportRest.concat(otherRest);
-  if (candidates.length === 0) return null;
+  if (candidates.length === 0) return { list: [], tie: false };
 
-  candidates.sort((a, b) => b.count - a.count || String(a.label).localeCompare(String(b.label), 'de'));
-  return candidates[0]; // {cat,label,count}
+  const maxCount = Math.max(...candidates.map(c => c.count));
+  const top = candidates.filter(c => c.count === maxCount);
+
+  // bei Gleichstand mehrere (Stechen) -> rot
+  const tie = top.length > 1;
+
+  // stabile Sortierung für Export
+  top.sort((a, b) => String(a.label).localeCompare(String(b.label), 'de'));
+
+  return { list: top, tie };
 }
 
 /* ===================== Farben + Suffix ===================== */
-function prepareData(entries, ersatzName) {
+function prepareData(entries, ersatzNames, tie) {
   const labels = entries.map(e => e[0]);
   const values = entries.map(e => e[1]);
 
@@ -179,11 +219,12 @@ function prepareData(entries, ersatzName) {
 
   labels.forEach((label, i) => {
     let suffix = "";
-    if (ersatzName && label === ersatzName) suffix = " (Ersatzbewerb)";
+    if (ersatzNames && ersatzNames.includes(label)) suffix = " (Ersatzbewerb)";
     suffixes.push(suffix);
 
     if (i < 3) colors.push("rgba(34,197,94,0.85)");
-    else if (ersatzName && label === ersatzName) colors.push("rgba(234,179,8,0.9)");
+    else if (ersatzNames && ersatzNames.includes(label) && tie) colors.push("rgba(239,68,68,0.9)");     // rot bei Tie
+    else if (ersatzNames && ersatzNames.includes(label)) colors.push("rgba(234,179,8,0.9)");            // gelb bei Single
     else colors.push("rgba(148,163,184,0.9)");
   });
 
@@ -191,12 +232,14 @@ function prepareData(entries, ersatzName) {
 }
 
 /* ===================== Chart Rendering ===================== */
-function drawChart(id, entries, type, ersatzName) {
+function drawChart(id, entries, type, ersatzNames, tie) {
   if (type === "sport" && sportChart) sportChart.destroy();
   if (type === "other" && otherChart) otherChart.destroy();
 
-  const { labels, values, colors, suffixes } = prepareData(entries, ersatzName);
-  const ersatzIndex = ersatzName ? labels.indexOf(ersatzName) : -1;
+  const { labels, values, colors, suffixes } = prepareData(entries, ersatzNames, tie);
+  const ersatzIndices = (ersatzNames && ersatzNames.length)
+    ? ersatzNames.map(n => labels.indexOf(n)).filter(i => i >= 0)
+    : [];
   const maxVal = Math.max(0, ...values);
 
   const canvas = document.getElementById(id);
@@ -247,9 +290,9 @@ function drawChart(id, entries, type, ersatzName) {
             display: true,
             color: "#fff",
             callback: (v, i) => {
-              if (i < 3) return String(i + 1);      // 1,2,3 links
-              if (ersatzIndex === i) return "E";    // Ersatzbewerb
-              return "";                             // sonst nichts
+              if (i < 3) return String(i + 1);                 // 1,2,3 links
+              if (ersatzIndices.includes(i)) return "E";       // Ersatzbewerb (auch bei Tie)
+              return "";                                       // sonst nichts
             }
           },
           grid:{ display:false }
@@ -263,6 +306,68 @@ function drawChart(id, entries, type, ersatzName) {
   else otherChart = chart;
 }
 
+/* ===================== CSV Export (neu) ===================== */
+function csvEscape(s) {
+  const str = String(s ?? "");
+  if (/[",\n\r;]/.test(str)) return '"' + str.replace(/"/g, '""') + '"';
+  return str;
+}
+function downloadCSV(filename, csvText) {
+  // BOM für Excel
+  const blob = new Blob(["\uFEFF" + csvText], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+document.getElementById("exportCsv").addEventListener("click", () => {
+  const st = __exportState;
+  const tie = st.tie;
+
+  const lines = [];
+  lines.push([
+    "stand",
+    "abgegebene_stimmen",
+    "kategorie",
+    "rang_in_kategorie",
+    "label",
+    "stimmen",
+    "top3",
+    "ersatzbewerb",
+    "stechen"
+  ].join(";"));
+
+  function addCategory(catName, entries) {
+    entries.forEach(([label, count], idx) => {
+      const rank = idx + 1;
+      const top3 = rank <= 3 ? 1 : 0;
+      const ersatz = st.ersatzList.some(e => e.cat === catName && e.label === label) ? 1 : 0;
+      const stechen = (tie && ersatz) ? 1 : 0;
+      lines.push([
+        csvEscape(st.stand),
+        st.total,
+        csvEscape(catName === "sport" ? "Sportarten" : "Sonstiges"),
+        rank,
+        csvEscape(label),
+        count,
+        top3,
+        ersatz,
+        stechen
+      ].join(";"));
+    });
+  }
+
+  addCategory("sport", st.sportEntries);
+  addCategory("other", st.otherEntries);
+
+  const stamp = new Date().toISOString().slice(0,19).replace(/[:T]/g,"-");
+  downloadCSV(`FC-Betenmacher_Auswertung_${stamp}.csv`, lines.join("\n"));
+});
+
 /* ===================== Load ===================== */
 db.ref('votes').once('value').then(snap => {
   const votes = snap.val() || {};
@@ -273,12 +378,27 @@ db.ref('votes').once('value').then(snap => {
   const sportEntries = sortEntries(sport);
   const otherEntries = sortEntries(other);
 
-  const ersatz = pickOverallErsatz(sportEntries, otherEntries);
+  const ersatzPick = pickOverallErsatz(sportEntries, otherEntries);
+  const ersatzList = ersatzPick.list;
+  const tie = ersatzPick.tie;
 
-  drawChart("sportChart", sportEntries, "sport", ersatz && ersatz.cat === "sport" ? ersatz.label : null);
-  drawChart("otherChart", otherEntries, "other", ersatz && ersatz.cat === "other" ? ersatz.label : null);
+  const sportErsatzNames = ersatzList.filter(e => e.cat === "sport").map(e => e.label);
+  const otherErsatzNames = ersatzList.filter(e => e.cat === "other").map(e => e.label);
 
-  setStatus("Stand: " + new Date().toLocaleString('de-AT'));
+  drawChart("sportChart", sportEntries, "sport", sportErsatzNames.length ? sportErsatzNames : null, tie);
+  drawChart("otherChart", otherEntries, "other", otherErsatzNames.length ? otherErsatzNames : null, tie);
+
+  const stand = new Date().toLocaleString('de-AT');
+  setStatus("Stand: " + stand);
+
+  // Export-State befüllen (neu)
+  __exportState.total = total;
+  __exportState.sportEntries = sportEntries;
+  __exportState.otherEntries = otherEntries;
+  __exportState.ersatzList = ersatzList;
+  __exportState.tie = tie;
+  __exportState.stand = stand;
+
 }).catch(err => {
   console.error("Fehler beim Lesen von /votes:", err);
   document.getElementById('count').innerText = 'Fehler beim Laden.';
