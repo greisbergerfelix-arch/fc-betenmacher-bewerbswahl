@@ -1,0 +1,1164 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FC Betenmacher 5 Kampf Partnerauslosung</title>
+
+  <style>
+    :root{
+      --bg:#0b0f17;
+      --muted:#9aa4b2;
+      --text:#e5e7eb;
+      --accent:#22c55e;
+      --danger:#ef4444;
+      --line: rgba(255,255,255,.10);
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: radial-gradient(1200px 700px at 30% 0%, #16233a 0%, var(--bg) 55%);
+      color:var(--text);
+      min-height:100vh;
+    }
+
+    .wrap{
+      max-width: 1650px;
+      margin: 0 auto;
+      padding: 8px 18px 10px;
+      min-height: 100vh;
+      display:flex;
+      flex-direction:column;
+    }
+    h1{
+      margin: 2px 0 8px;
+      font-size: 30px;
+      text-align:center;
+      font-weight:1000;
+      letter-spacing:.2px;
+    }
+    .stage{
+      flex:1;
+      display:flex;
+      align-items:stretch;
+      justify-content:center;
+    }
+
+    .card{
+      width:100%;
+      height: calc(100vh - 66px);
+      max-height: 920px;
+      background: rgba(17,24,39,.86);
+      border:1px solid var(--line);
+      border-radius:16px;
+      padding:18px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.25);
+      backdrop-filter: blur(8px);
+      display:flex;
+      flex-direction:column;
+    }
+
+    .mode-run #setupCard{display:none}
+    .mode-setup #runCard{display:none}
+
+    .split{
+      flex:1;
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:14px;
+      min-height: 0;
+    }
+    @media (max-width:1100px){ .split{grid-template-columns:1fr} }
+
+    .panelCol{
+      display:flex;
+      flex-direction:column;
+      min-height:0;
+    }
+
+    .muted{color:var(--muted); font-size:13px; line-height:1.35}
+
+    textarea{
+      width:100%;
+      flex:1;
+      min-height:260px;
+      resize:none;
+      background: rgba(0,0,0,.22);
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:12px;
+      color:var(--text);
+      outline:none;
+      font-size:14px;
+      margin-top:8px;
+    }
+
+    /* ✅ neue Blacklist-Textbox: kompakter */
+    #forbiddenInput{
+      min-height:160px;
+      flex: 0 0 auto;
+    }
+
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px}
+    .row > *{flex:1}
+    .row .tight{flex:0 0 auto}
+
+    button{
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.08);
+      color:var(--text);
+      border-radius:12px;
+      padding:10px 12px;
+      cursor:pointer;
+      transition:.15s ease;
+      font-weight:700;
+      user-select:none;
+    }
+    button:hover{transform: translateY(-1px); background: rgba(255,255,255,.12)}
+    button:disabled{opacity:.45;cursor:not-allowed;transform:none}
+
+    button.primary{background: rgba(34,197,94,.18); border-color: rgba(34,197,94,.35)}
+    button.primary:hover{background: rgba(34,197,94,.26)}
+    button.danger{background: rgba(239,68,68,.16); border-color: rgba(239,68,68,.35)}
+    button.danger:hover{background: rgba(239,68,68,.22)}
+
+    button.big{
+      width:100%;
+      padding:16px 16px;
+      font-size:18px;
+      border-radius:14px;
+    }
+
+    .checklist{
+      flex:1;
+      min-height:0;
+      overflow:auto;
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:10px;
+      background: rgba(0,0,0,.18);
+      margin-top:8px;
+    }
+    .check{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding:8px 10px;
+      border-radius:12px;
+      font-size:15px;
+    }
+    .check:hover{background: rgba(255,255,255,.05)}
+    .check input{width:18px;height:18px}
+
+    .status{
+      margin-top:10px;
+      padding:10px 12px;
+      border-radius:12px;
+      border:1px solid var(--line);
+      background: rgba(0,0,0,.18);
+      font-size:14px;
+      white-space:pre-line; /* ✅ erlaubt Zeilenumbrüche in Status */
+    }
+    .status.ok{border-color: rgba(34,197,94,.35)}
+    .status.bad{border-color: rgba(239,68,68,.35)}
+
+    /* RUN */
+    .mode-run .runGrid{
+      flex:1;
+      display:grid;
+      grid-template-columns: 1.15fr .85fr;
+      gap:14px;
+      align-items:start;
+      min-height:0;
+    }
+    @media (max-width:1100px){ .mode-run .runGrid{grid-template-columns:1fr} }
+
+    .runLeft{display:flex;flex-direction:column;gap:12px;align-items:center;min-height:0}
+
+    .wheelWrap{
+      position:relative;
+      width: min(920px, 62vw);
+      aspect-ratio: 1/1;
+    }
+    @media (max-width:1100px){ .wheelWrap{width:min(820px, 94vw);} }
+
+    canvas#wheel{
+      width:100%;
+      height:100%;
+      border-radius:50%;
+      background: rgba(0,0,0,.18);
+      border: 1px solid var(--line);
+      box-shadow: 0 16px 45px rgba(0,0,0,.35);
+      display:block;
+    }
+
+    .flap{
+      position:absolute;
+      top:-6px;
+      left:50%;
+      transform: translateX(-50%) rotate(0deg);
+      transform-origin: 50% 0%;
+      width: 0; height: 0;
+      border-left: 16px solid transparent;
+      border-right: 16px solid transparent;
+      border-top: 30px solid #facc15;
+      filter: drop-shadow(0 6px 10px rgba(0,0,0,.45));
+      z-index: 3;
+      transition: transform 90ms ease;
+    }
+    .flap.kick{ transform: translateX(-50%) rotate(-18deg); }
+
+    .pointer{
+      position:absolute;
+      top:-8px;
+      left:50%;
+      transform: translateX(-50%);
+      width:0;height:0;
+      border-left: 22px solid transparent;
+      border-right: 22px solid transparent;
+      border-bottom: 34px solid var(--accent);
+      filter: drop-shadow(0 6px 10px rgba(0,0,0,.5));
+      z-index: 2;
+      opacity:.85;
+    }
+
+    .centerCap{
+      position:absolute;
+      inset: 50% auto auto 50%;
+      transform: translate(-50%,-50%);
+      width: 26%;
+      aspect-ratio: 1/1;
+      border-radius:50%;
+      background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.22), rgba(0,0,0,.35)); /* ✅ FIX */
+      border:1px solid var(--line);
+      display:grid;
+      place-items:center;
+      font-weight:900;
+      letter-spacing:.6px;
+      color: rgba(255,255,255,.92);
+      text-align:center;
+      padding:10px;
+      font-size:18px;
+      text-transform: uppercase;
+    }
+
+    .teamsHeader{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:10px}
+    .pill{
+      display:inline-block;
+      padding:5px 10px;
+      border-radius:999px;
+      background: rgba(255,255,255,.08);
+      border:1px solid var(--line);
+      font-size:12px;
+      color:var(--muted);
+      white-space:nowrap;
+    }
+
+    .winnerBanner{
+      width:100%;
+      border-radius:16px;
+      border:1px solid rgba(34,197,94,.35);
+      background: rgba(34,197,94,.10);
+      padding:12px 14px;
+      display:none;
+      margin-bottom:12px;
+    }
+    .winnerBanner .title{color:rgba(229,231,235,.75); font-size:13px}
+    .winnerBanner .name{font-size:20px; font-weight:900; margin-top:2px}
+    .winnerBanner .info{color:rgba(229,231,235,.75); font-size:13px; margin-top:6px}
+
+    table{
+      width:100%;
+      border-collapse:collapse;
+      overflow:hidden;
+      border-radius:14px;
+      border:1px solid var(--line);
+      background: rgba(0,0,0,.10);
+      table-layout: fixed;
+    }
+    th, td{
+      border-bottom:1px solid var(--line);
+      padding:12px 12px;
+      text-align:left;
+      font-size:15px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    th{background: rgba(255,255,255,.06); font-weight:900}
+    tr:last-child td{border-bottom:none}
+
+    .rightButtons{display:flex;gap:12px;margin-top:14px}
+    .rightButtons > *{flex:1}
+
+    #confetti{position:fixed;inset:0;pointer-events:none;z-index:9999}
+  </style>
+</head>
+
+<body class="mode-setup">
+  <canvas id="confetti"></canvas>
+
+  <div class="wrap">
+    <h1>FC Betenmacher 5 Kampf Partnerauslosung</h1>
+
+    <div class="stage">
+      <!-- SETUP -->
+      <div class="card" id="setupCard">
+        <div class="split">
+          <div class="panelCol">
+            <div style="font-weight:900; font-size:16px;">1) Mitgliederliste</div>
+            <div class="muted">Ein Name pro Zeile. Danach „Liste laden“ klicken und rechts auswählen.</div>
+            <textarea id="namesInput" placeholder="Max Mustermann&#10;Erika Musterfrau&#10;..."></textarea>
+            <div class="row">
+              <button class="primary tight" id="loadBtn" type="button">Liste laden</button>
+              <button class="tight" id="selectAllBtn" type="button">Alle auswählen</button>
+              <button class="tight" id="selectNoneBtn" type="button">Keine</button>
+            </div>
+          </div>
+
+          <div class="panelCol">
+            <div style="font-weight:900; font-size:16px;">2) Auswahl</div>
+            <div class="muted">Nur gerade Anzahl möglich (z. B. 16 oder 26).</div>
+            <div class="checklist" id="checklist"></div>
+
+            <!-- ✅ NEU: Verbotene Paarungen -->
+            <div style="margin-top:10px; font-weight:900; font-size:14px;">❌ Verbotene Paarungen</div>
+            <div class="muted">2 Namen pro Zeile (TAB oder mehrere Leerzeichen als Trenner).</div>
+            <textarea id="forbiddenInput" placeholder="Zoister Andreas	Stöllinger Hans&#10;Enzesberger Alois	Auswöger Mario&#10;..."></textarea>
+            <div class="row">
+              <button class="tight" id="testForbiddenBtn" type="button">Blacklist testen</button>
+            </div>
+
+            <div id="status" class="status bad">Bitte Liste laden und Mitglieder auswählen.</div>
+
+            <div class="row">
+              <button class="primary big" id="startBtn" disabled type="button">Zum Glücksrad</button>
+              <button class="tight danger" id="resetBtn" type="button">Reset</button>
+            </div>
+
+            <div class="muted" style="margin-top:8px">
+              Drehdauer: ca. 5 Sekunden · Zufall: gleichverteilt · Gewinner wird entfernt
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RUN -->
+      <div class="card" id="runCard">
+        <div class="runGrid">
+          <!-- LEFT -->
+          <div class="runLeft">
+            <div class="wheelWrap">
+              <div class="flap" id="flap"></div>
+              <div class="pointer"></div>
+              <canvas id="wheel" width="1200" height="1200"></canvas>
+              <div class="centerCap"><span id="capText">READY</span></div>
+            </div>
+          </div>
+
+          <!-- RIGHT -->
+          <div>
+            <div class="teamsHeader">
+              <div style="font-weight:900; font-size:16px;">Teams</div>
+              <span class="pill" id="progressPill">0 / 0 gezogen</span>
+            </div>
+
+            <div class="winnerBanner" id="winnerBanner">
+              <div class="title">Gezogen</div>
+              <div class="name" id="winnerName">–</div>
+              <div class="info" id="winnerInfo">–</div>
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:70px">Team</th>
+                  <th style="width:45%">Links</th>
+                  <th style="width:45%">Rechts</th>
+                </tr>
+              </thead>
+              <tbody id="teamsBody">
+                <tr><td colspan="3" class="muted">Noch keine Teams – klicke rechts auf „Nächste Drehung“.</td></tr>
+              </tbody>
+            </table>
+
+            <div class="rightButtons">
+              <button class="primary big" id="nextBtn" disabled type="button">Nächste Drehung</button>
+              <button class="danger big" id="runResetBtn" type="button">Reset</button>
+            </div>
+
+            <button class="secondary big" id="exportBtn" style="display:none; margin-top:12px" type="button">
+              CSV Export herunterladen
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const TWO_PI = Math.PI * 2;
+
+  function escapeHtml(s){
+    return String(s ?? "")
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  }
+
+  function downloadCSVExcel(filename, csv){
+    const bom = "\uFEFF";
+    const blob = new Blob([bom + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  const body = document.body;
+
+  // Setup DOM
+  const namesInput        = $("namesInput");
+  const checklist         = $("checklist");
+  const forbiddenInput    = $("forbiddenInput");
+  const testForbiddenBtn  = $("testForbiddenBtn");
+
+  const loadBtn      = $("loadBtn");
+  const selectAllBtn = $("selectAllBtn");
+  const selectNoneBtn= $("selectNoneBtn");
+  const startBtn     = $("startBtn");
+  const resetBtn     = $("resetBtn");
+  const statusEl     = $("status");
+
+  // Run DOM
+  const nextBtn      = $("nextBtn");
+  const runResetBtn  = $("runResetBtn");
+  const exportBtn    = $("exportBtn");
+  const winnerBanner = $("winnerBanner");
+  const winnerNameEl = $("winnerName");
+  const winnerInfoEl = $("winnerInfo");
+  const progressPill = $("progressPill");
+  const capText      = $("capText");
+  const teamsBody    = $("teamsBody");
+  const flap         = $("flap");
+
+  // Wheel
+  const wheel = $("wheel");
+  const ctx = wheel.getContext("2d");
+
+  // Confetti
+  const confettiCanvas = $("confetti");
+  const cctx = confettiCanvas.getContext("2d");
+
+  let allNames = [];
+  let selected = [];
+  let remaining = [];
+  let wheelItems = [];
+  let pendingRemove = null;
+
+  let teams = 0;
+  let leftPicks = [];
+  let rightPicks = [];
+  let drawCount = 0;
+
+  let spinning = false;
+  let rotation = 0;
+  let targetRotation = 0;
+
+  // tick / flap
+  let lastTickIndex = null;
+  let flapCooldown = 0;
+
+  // ✅ geheime Planung
+  let plannedDraws = [];
+  let plannedPairs = [];
+  let forbiddenSet = new Set();
+
+  function setMode(mode){
+    body.classList.remove("mode-setup", "mode-run");
+    body.classList.add(mode === "run" ? "mode-run" : "mode-setup");
+  }
+
+  function setStatus(ok, msg){
+    statusEl.classList.toggle("ok", !!ok);
+    statusEl.classList.toggle("bad", !ok);
+    statusEl.textContent = msg;
+  }
+
+  function parseNames(text){
+    return String(text||"").split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  }
+
+  function buildChecklist(names){
+    checklist.innerHTML = "";
+    names.forEach((name, i) => {
+      const row = document.createElement("label");
+      row.className = "check";
+      row.innerHTML = `<input type="checkbox" data-i="${i}"> <span>${escapeHtml(name)}</span>`;
+      checklist.appendChild(row);
+    });
+  }
+
+  function getSelectedFromChecklist(){
+    const boxes = checklist.querySelectorAll('input[type="checkbox"]');
+    const arr = [];
+    boxes.forEach(b => {
+      if (b.checked){
+        const i = Number(b.getAttribute("data-i"));
+        if (!Number.isNaN(i) && allNames[i]) arr.push(allNames[i]);
+      }
+    });
+    return arr;
+  }
+
+  // ---------- ✅ Blacklist Helpers ----------
+  function keyPair(a,b){
+    const A = String(a||"").trim();
+    const B = String(b||"").trim();
+    return [A,B].sort((x,y)=>x.localeCompare(y,'de')).join("||");
+  }
+
+  function parseForbiddenPairs(text){
+    const lines = String(text||"").split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+    const pairs = [];
+    for (const line of lines){
+      // TAB oder mindestens 2 Leerzeichen
+      const parts = line.split(/\t+|\s{2,}/).map(s=>s.trim()).filter(Boolean);
+      if (parts.length >= 2){
+        const a = parts[0];
+        const b = parts.slice(1).join(" ");
+        pairs.push([a,b]);
+      }
+    }
+    return pairs;
+  }
+
+  function validateForbiddenPairsAgainst(namesUniverse){
+    const universe = new Set(namesUniverse.map(s => String(s).trim()));
+    const rawPairs = parseForbiddenPairs(forbiddenInput?.value || "");
+
+    let okPairs = 0;
+    let selfPairs = 0;
+    let invalidLines = 0;
+
+    const unknownNames = new Set();
+    const forbiddenPairs = [];
+
+    for (const [a,b] of rawPairs){
+      const A = String(a).trim();
+      const B = String(b).trim();
+      if (!A || !B) { invalidLines++; continue; }
+      if (A === B) { selfPairs++; continue; }
+
+      const aKnown = universe.has(A);
+      const bKnown = universe.has(B);
+
+      if (!aKnown) unknownNames.add(A);
+      if (!bKnown) unknownNames.add(B);
+
+      // Nur Paare übernehmen, wo BEIDE Namen in der Mitgliederliste sind
+      if (aKnown && bKnown){
+        forbiddenPairs.push([A,B]);
+        okPairs++;
+      }
+    }
+
+    return {
+      rawCount: rawPairs.length,
+      okPairs,
+      selfPairs,
+      invalidLines,
+      unknownNames: [...unknownNames],
+      forbiddenPairs
+    };
+  }
+
+  function shuffle(arr){
+    for (let i = arr.length - 1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  function makePairsWithConstraints(names, forbiddenSetLocal){
+    const pool = shuffle([...names]);
+
+    function bt(list){
+      if (list.length === 0) return [];
+      const a = list[0];
+
+      const candidateIdx = [];
+      for (let i = 1; i < list.length; i++){
+        const b = list[i];
+        if (!forbiddenSetLocal.has(keyPair(a,b))) candidateIdx.push(i);
+      }
+      shuffle(candidateIdx);
+
+      for (const idx of candidateIdx){
+        const b = list[idx];
+        const rest = list.slice(1);
+        rest.splice(idx - 1, 1);
+        const sub = bt(rest);
+        if (sub !== null) return [[a,b], ...sub];
+      }
+      return null;
+    }
+
+    return bt(pool);
+  }
+  // ----------------------------------------
+
+  function updateSelectionState(){
+    selected = getSelectedFromChecklist();
+    const n = selected.length;
+
+    if (allNames.length === 0){
+      startBtn.disabled = true;
+      setStatus(false, "Bitte Liste laden und Mitglieder auswählen.");
+      return;
+    }
+    if (n < 2){
+      startBtn.disabled = true;
+      setStatus(false, "Bitte mindestens 2 Mitglieder auswählen.");
+      return;
+    }
+    if (n % 2 !== 0){
+      startBtn.disabled = true;
+      setStatus(false, `Ungerade Auswahl (${n}). Bitte eine gerade Anzahl auswählen.`);
+      return;
+    }
+
+    // Optional: Hinweis zur Blacklist-Qualität
+    const chk = validateForbiddenPairsAgainst(allNames);
+    const note = (chk.unknownNames.length > 0)
+      ? `\nHinweis: ${chk.unknownNames.length} Name(n) in Blacklist nicht in Mitgliederliste.`
+      : "";
+
+    startBtn.disabled = false;
+    setStatus(true, `OK: ${n} Mitglieder ausgewählt → ${n/2} Teams.${note}`);
+  }
+
+  function resizeConfetti(){
+    confettiCanvas.width = window.innerWidth * devicePixelRatio;
+    confettiCanvas.height = window.innerHeight * devicePixelRatio;
+  }
+  window.addEventListener("resize", resizeConfetti);
+  resizeConfetti();
+
+  function fireConfetti(durationMs = 1200){
+    const w = confettiCanvas.width;
+    const h = confettiCanvas.height;
+    const count = 180;
+
+    let pieces = [];
+    for (let i=0;i<count;i++){
+      pieces.push({
+        x: Math.random()*w,
+        y: -Math.random()*h*0.2,
+        vx: (Math.random()-0.5)*6*devicePixelRatio,
+        vy: (Math.random()*5 + 5)*devicePixelRatio,
+        rot: Math.random()*TWO_PI,
+        vr: (Math.random()-0.5)*0.25,
+        size: (Math.random()*6 + 6)*devicePixelRatio,
+        hue: Math.floor(Math.random()*360),
+      });
+    }
+
+    const t0 = performance.now();
+    function tick(now){
+      const t = now - t0;
+      cctx.clearRect(0,0,w,h);
+
+      pieces.forEach(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.15*devicePixelRatio;
+        p.rot += p.vr;
+
+        cctx.save();
+        cctx.translate(p.x, p.y);
+        cctx.rotate(p.rot);
+        cctx.fillStyle = `hsla(${p.hue} 85% 55% / 0.95)`;
+        cctx.fillRect(-p.size/2, -p.size/2, p.size, p.size*0.6);
+        cctx.restore();
+      });
+
+      pieces = pieces.filter(p => p.y < h + 50*devicePixelRatio);
+
+      if (t < durationMs) requestAnimationFrame(tick);
+      else cctx.clearRect(0,0,w,h);
+    }
+    requestAnimationFrame(tick);
+  }
+
+  function computeMultiplier(n){
+    if (n === 8) return 2;
+    if (n === 7) return 2;
+    if (n === 6) return 3;
+    if (n === 5) return 3;
+    if (n === 4) return 4;
+    if (n === 3) return 6;
+    if (n === 2) return 8;
+    return 1;
+  }
+
+  function computeWheelItems(){
+    const n = remaining.length;
+    if (n === 0){
+      wheelItems = ["—"];
+      return;
+    }
+    const mult = computeMultiplier(n);
+    const out = [];
+    for (let r=0; r<mult; r++){
+      for (let i=0;i<n;i++) out.push(remaining[i]);
+    }
+    wheelItems = out;
+  }
+
+  function hashColor(str){
+    let h = 0;
+    for (let i=0;i<str.length;i++) h = (h*31 + str.charCodeAt(i)) >>> 0;
+    return `hsl(${h % 360} 70% 45%)`;
+  }
+
+  function drawWheel(){
+    const w = wheel.width, h = wheel.height;
+    const cx = w/2, cy = h/2;
+    const r = Math.min(w,h)*0.46;
+
+    ctx.clearRect(0,0,w,h);
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, r*1.045, 0, TWO_PI);
+    ctx.fillStyle = "rgba(255,255,255,0.03)";
+    ctx.fill();
+
+    const items = wheelItems.length ? wheelItems : ["—"];
+    const n = items.length;
+    const slice = TWO_PI / n;
+
+    const base = rotation - Math.PI/2;
+
+    for (let i=0;i<n;i++){
+      const a0 = base + i*slice;
+      const a1 = a0 + slice;
+
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, r, a0, a1);
+      ctx.closePath();
+      ctx.fillStyle = (remaining.length ? hashColor(items[i]) : "rgba(255,255,255,0.06)");
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, r, a0, a0);
+      ctx.strokeStyle = "rgba(255,255,255,0.20)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      const mid = (a0+a1)/2;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(mid);
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "rgba(255,255,255,0.96)";
+      ctx.font = "900 34px system-ui, -apple-system, Segoe UI, Roboto, Arial";
+
+      const label = String(items[i]);
+      const maxLen = 22;
+      const txt = label.length > maxLen ? label.slice(0, maxLen-1) + "…" : label;
+      ctx.fillText(txt, r*0.93, 0);
+      ctx.restore();
+    }
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, r*0.12, 0, TWO_PI);
+    ctx.fillStyle = "rgba(0,0,0,0.25)";
+    ctx.fill();
+  }
+
+  function updateFlapTick(){
+    const n = wheelItems.length || 1;
+    const slice = TWO_PI / n;
+
+    const rot = ((rotation % TWO_PI) + TWO_PI) % TWO_PI;
+    const idxAtPointer = Math.floor(((TWO_PI - rot + slice/2) % TWO_PI) / slice) % n;
+
+    if (lastTickIndex === null) lastTickIndex = idxAtPointer;
+
+    if (idxAtPointer !== lastTickIndex){
+      lastTickIndex = idxAtPointer;
+      const now = performance.now();
+      if (now > flapCooldown){
+        flapCooldown = now + 40;
+        flap.classList.add("kick");
+        setTimeout(() => flap.classList.remove("kick"), 90);
+      }
+    }
+  }
+
+  function renderTeams(){
+    if (!teams){
+      teamsBody.innerHTML = `<tr><td colspan="3" class="muted">Noch keine Teams – klicke rechts auf „Nächste Drehung“.</td></tr>`;
+      progressPill.textContent = `0 / 0 gezogen`;
+      return;
+    }
+
+    let html = "";
+    for (let i=0;i<teams;i++){
+      const L = leftPicks[i] ?? "";
+      const R = rightPicks[i] ?? "";
+      html += `
+        <tr>
+          <td>${i+1}</td>
+          <td>${escapeHtml(L)}</td>
+          <td>${escapeHtml(R)}</td>
+        </tr>
+      `;
+    }
+    teamsBody.innerHTML = html;
+    progressPill.textContent = `${drawCount} / ${teams*2} gezogen`;
+  }
+
+  function assignWinner(name){
+    if (drawCount < teams){
+      leftPicks[drawCount] = name;
+      winnerInfoEl.textContent = `Eingetragen: Team ${drawCount+1} (links)`;
+    } else {
+      const idx = drawCount - teams;
+      rightPicks[idx] = name;
+      winnerInfoEl.textContent = `Eingetragen: Team ${idx+1} (rechts)`;
+    }
+    drawCount++;
+    renderTeams();
+  }
+
+  function pulseLatestCell(){
+    const rowIndex = (drawCount <= teams) ? (drawCount-1) : (drawCount-teams-1);
+    const colIndex = (drawCount <= teams) ? 1 : 2;
+    const rows = teamsBody.querySelectorAll("tr");
+    if (!rows[rowIndex]) return;
+    const tds = rows[rowIndex].querySelectorAll("td");
+    if (!tds[colIndex]) return;
+
+    const cell = tds[colIndex];
+    const prev = cell.style.background;
+    cell.style.background = "rgba(56,189,248,0.18)";
+    cell.style.transition = "background 0.35s ease";
+    setTimeout(() => { cell.style.background = prev || ""; }, 650);
+  }
+
+  function prepareGame(){
+    remaining = [...selected];
+    teams = selected.length / 2;
+    leftPicks = Array(teams).fill("");
+    rightPicks = Array(teams).fill("");
+    drawCount = 0;
+
+    spinning = false;
+    rotation = 0;
+    targetRotation = 0;
+
+    pendingRemove = null;
+    lastTickIndex = null;
+    flapCooldown = 0;
+
+    plannedDraws = [];
+    plannedPairs = [];
+
+    // ✅ Blacklist gegen Mitgliederliste prüfen und nur gültige Paare übernehmen
+    const chk = validateForbiddenPairsAgainst(allNames);
+
+    // Wir wenden die Blacklist nur auf TEILNEHMER (selected) an
+    const selectedSet = new Set(selected.map(s => String(s).trim()));
+    forbiddenSet = new Set(
+      chk.forbiddenPairs
+        .filter(([a,b]) => selectedSet.has(a) && selectedSet.has(b))
+        .map(([a,b]) => keyPair(a,b))
+    );
+
+    // ✅ Teams geheim vorab planen
+    const pairs = makePairsWithConstraints(remaining, forbiddenSet);
+    if (!pairs){
+      setMode("setup");
+      const unknownLine = (chk.unknownNames.length > 0)
+        ? `\nUnbekannte Namen in Blacklist: ${chk.unknownNames.slice(0,8).join(", ")}${chk.unknownNames.length>8?"…":""}`
+        : "";
+      setStatus(false,
+        "Keine gültige Teameinteilung möglich (Blacklist blockiert).\n" +
+        "Tipp: Blacklist reduzieren oder Teilnehmer-Auswahl anpassen." +
+        unknownLine
+      );
+      return;
+    }
+
+    plannedPairs = pairs;
+
+    // Zieh-Reihenfolge: erst links, dann rechts (deine Tabelle)
+    plannedDraws = [
+      ...pairs.map(p => p[0]),
+      ...pairs.map(p => p[1]),
+    ];
+
+    winnerBanner.style.display = "none";
+    exportBtn.style.display = "none";
+    capText.textContent = "SPIN";
+
+    nextBtn.disabled = false;
+
+    computeWheelItems();
+    renderTeams();
+    drawWheel();
+  }
+
+  function endGame(){
+    nextBtn.disabled = true;
+    capText.textContent = "FERTIG";
+    exportBtn.style.display = "block";
+  }
+
+  function applyPendingRemove(){
+    if (!pendingRemove) return;
+    const idx = remaining.indexOf(pendingRemove.name);
+    if (idx >= 0) remaining.splice(idx, 1);
+    pendingRemove = null;
+  }
+
+  function easeOutQuint(t){ return 1 - Math.pow(1 - t, 5); }
+
+  function spinOnce(){
+    if (spinning) return;
+
+    applyPendingRemove();
+    if (remaining.length === 0) return;
+
+    spinning = true;
+    nextBtn.disabled = true;
+    capText.textContent = "…";
+    winnerBanner.style.display = "none";
+
+    computeWheelItems();
+
+    const n = wheelItems.length;
+    const slice = TWO_PI / n;
+
+    // ✅ Gewinner kommt aus geheimer Vorab-Planung
+    const winner = plannedDraws[drawCount];
+    if (!winner){
+      spinning = false;
+      capText.textContent = "SPIN";
+      nextBtn.disabled = false;
+      return;
+    }
+
+    let segIndex = wheelItems.findIndex(x => x === winner);
+    if (segIndex < 0) segIndex = 0;
+
+    const angCenter = (segIndex + 0.5) * slice;
+    const targetMod = (TWO_PI - (angCenter % TWO_PI)) % TWO_PI;
+
+    const currentMod = ((rotation % TWO_PI) + TWO_PI) % TWO_PI;
+    const delta = (targetMod - currentMod + TWO_PI) % TWO_PI;
+
+    const extraSpins = 6;
+    const totalDelta = extraSpins * TWO_PI + delta;
+
+    const startRot = rotation;
+    targetRotation = rotation + totalDelta;
+
+    const duration = 11800; // deine Drehdauer
+    const t0 = performance.now();
+
+    function frame(now){
+      const t = clamp((now - t0) / duration, 0, 1);
+      const e = easeOutQuint(t);
+      rotation = startRot + (targetRotation - startRot) * e;
+      drawWheel();
+      updateFlapTick();
+
+      if (t < 1){
+        requestAnimationFrame(frame);
+        return;
+      }
+
+      rotation = targetRotation;
+      drawWheel();
+      updateFlapTick();
+
+      // ✅ Anzeige
+      winnerNameEl.textContent = winner;
+      winnerBanner.style.display = "block";
+      fireConfetti(1200);
+
+      // ✅ in Tabelle eintragen
+      assignWinner(winner);
+      pulseLatestCell();
+
+      // ✅ Gewinner nach der Runde entfernen
+      pendingRemove = { name: winner };
+
+      spinning = false;
+
+      if (drawCount >= teams * 2){
+        endGame();
+      } else {
+        capText.textContent = "SPIN";
+        nextBtn.disabled = false;
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  function resetAll(){
+    spinning = false;
+    selected = [];
+    remaining = [];
+    wheelItems = [];
+    pendingRemove = null;
+
+    teams = 0;
+    leftPicks = [];
+    rightPicks = [];
+    drawCount = 0;
+
+    lastTickIndex = null;
+    flapCooldown = 0;
+
+    plannedDraws = [];
+    plannedPairs = [];
+    forbiddenSet = new Set();
+
+    winnerBanner.style.display = "none";
+    exportBtn.style.display = "none";
+    capText.textContent = "READY";
+
+    nextBtn.disabled = true;
+
+    renderTeams();
+    drawWheel();
+    setMode("setup");
+    updateSelectionState();
+  }
+
+  function exportCSV(){
+    let csv = "Team;Links;Rechts\r\n";
+    for (let i=0;i<teams;i++){
+      const L = leftPicks[i] ?? "";
+      const R = rightPicks[i] ?? "";
+      csv += `${i+1};"${String(L).replaceAll('"','""')}";"${String(R).replaceAll('"','""')}"\r\n`;
+    }
+    downloadCSVExcel("teams.csv", csv);
+  }
+
+  // ✅ Buttons / Events
+  loadBtn.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+
+    const txt = (namesInput.value || "").trim();
+    allNames = parseNames(txt);
+
+    if (allNames.length === 0){
+      buildChecklist([]);
+      setStatus(false, "Keine Namen gefunden. Bitte mindestens 2 Namen einfügen.");
+      startBtn.disabled = true;
+      return;
+    }
+
+    buildChecklist(allNames);
+    setStatus(false, `Liste geladen (${allNames.length}). Jetzt rechts auswählen (gerade Anzahl).`);
+    updateSelectionState();
+  });
+
+  checklist.addEventListener("change", updateSelectionState);
+  forbiddenInput.addEventListener("input", () => {
+    // Status live aktualisieren, aber nur wenn Liste geladen ist
+    if (allNames.length > 0) updateSelectionState();
+  });
+
+  selectAllBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    checklist.querySelectorAll('input[type="checkbox"]').forEach(b => b.checked = true);
+    updateSelectionState();
+  });
+
+  selectNoneBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    checklist.querySelectorAll('input[type="checkbox"]').forEach(b => b.checked = false);
+    updateSelectionState();
+  });
+
+  testForbiddenBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+
+    if (allNames.length === 0){
+      setStatus(false, "Bitte zuerst die Mitgliederliste laden, damit ich die Blacklist prüfen kann.");
+      return;
+    }
+
+    const chk = validateForbiddenPairsAgainst(allNames);
+
+    // zusätzliche Info: wie viele Paare betreffen aktuell ausgewählte Teilnehmer?
+    const sel = getSelectedFromChecklist();
+    const selSet = new Set(sel.map(s => String(s).trim()));
+    const affecting = chk.forbiddenPairs.filter(([a,b]) => selSet.has(a) && selSet.has(b)).length;
+
+    const u = chk.unknownNames;
+    const uLine = (u.length > 0)
+      ? `\nUnbekannte Namen (${u.length}): ${u.slice(0,10).join(", ")}${u.length>10?"…":""}`
+      : "";
+
+    const msg =
+      `Blacklist geprüft:\n` +
+      `• Zeilen erkannt: ${chk.rawCount}\n` +
+      `• Gültige Paare (in Mitgliederliste): ${chk.okPairs}\n` +
+      `• Ungültige Zeilen: ${chk.invalidLines}\n` +
+      `• Selbst-Paare (A = A): ${chk.selfPairs}\n` +
+      `• Betreffen aktuell ausgewählte Teilnehmer: ${affecting}` +
+      uLine;
+
+    setStatus(true, msg);
+  });
+
+  startBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    selected = getSelectedFromChecklist();
+    if (selected.length < 2 || selected.length % 2 !== 0){
+      updateSelectionState();
+      return;
+    }
+    prepareGame();
+    // prepareGame kann scheitern (Blacklist blockiert) -> dann NICHT in run wechseln
+    if (plannedDraws.length === selected.length) setMode("run");
+  });
+
+  resetBtn.addEventListener("click", (e) => { e.preventDefault(); resetAll(); });
+  runResetBtn.addEventListener("click", (e) => { e.preventDefault(); resetAll(); });
+
+  nextBtn.addEventListener("click", (e) => { e.preventDefault(); spinOnce(); });
+  exportBtn.addEventListener("click", (e) => { e.preventDefault(); exportCSV(); });
+
+  // Init
+  computeWheelItems();
+  drawWheel();
+  renderTeams();
+  updateSelectionState();
+})();
+</script>
+</body>
+</html>
